@@ -116,12 +116,12 @@ export default function CheckInForm({ lang }: { lang: string }) {
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+              {/* <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
                 <Zap size={28} className="text-white" />
               </div>
               <div className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full border-2 border-primary flex items-center justify-center">
                 <Sparkles size={10} className="text-primary" />
-              </div>
+              </div> */}
             </div>
             <div>
               <h2 className="text-2xl font-bold text-foreground tracking-tight">
