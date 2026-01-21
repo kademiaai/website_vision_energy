@@ -1,7 +1,7 @@
-// components/forms/CheckInForm.tsx - Phiên bản chuyên nghiệp, hiện đại
+// components/forms/CheckInForm.tsx - Cập nhật với Modal thông báo
 "use client";
 import { useState } from "react";
-import { Car, User, Phone, CheckCircle, AlertCircle, Loader2, X, MessageCircle, Trophy, Zap, ChevronRight, Sparkles } from "lucide-react";
+import { Car, User, Phone, CheckCircle, AlertCircle, Loader2, X, MessageCircle, Trophy, Zap, ChevronRight, Sparkles, Info, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { translations } from "@/constants/translations";
 import { supabase } from "@/lib/supabase";
@@ -11,6 +11,7 @@ export default function CheckInForm({ lang }: { lang: string }) {
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showCustomerNotFound, setShowCustomerNotFound] = useState(false);
   const [stats, setStats] = useState({ monthly: 0, total: 0 });
   const [formData, setFormData] = useState({ plate: "", name: "", phone: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -24,6 +25,7 @@ export default function CheckInForm({ lang }: { lang: string }) {
     }
     setFormData({ ...formData, plate: val });
     if (errors.plate) setErrors({ ...errors, plate: "" });
+    if (showCustomerNotFound) setShowCustomerNotFound(false);
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,8 +79,8 @@ export default function CheckInForm({ lang }: { lang: string }) {
         .single();
 
       if (!customer && !isNewCustomer) {
-        alert("Thông tin xe chưa có trên hệ thống. Vui lòng đăng ký khách mới.");
-        setIsNewCustomer(true);
+        // Hiển thị modal thay vì alert
+        setShowCustomerNotFound(true);
         setLoading(false);
         return;
       }
@@ -104,6 +106,16 @@ export default function CheckInForm({ lang }: { lang: string }) {
     }
   };
 
+  // Hàm xử lý khi người dùng đồng ý đăng ký mới
+  const handleRegisterNewCustomer = () => {
+    setShowCustomerNotFound(false);
+    setIsNewCustomer(true);
+    // Auto focus vào input tên khi modal đóng
+    setTimeout(() => {
+      document.querySelector<HTMLInputElement>('input[placeholder*="Họ tên" i], input[placeholder*="Name" i]')?.focus();
+    }, 100);
+  };
+
   return (
     <div className="relative w-full max-w-md mx-auto">
       {/* FORM CONTAINER */}
@@ -116,12 +128,12 @@ export default function CheckInForm({ lang }: { lang: string }) {
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="relative">
-              {/* <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
                 <Zap size={28} className="text-white" />
               </div>
               <div className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full border-2 border-primary flex items-center justify-center">
                 <Sparkles size={10} className="text-primary" />
-              </div> */}
+              </div>
             </div>
             <div>
               <h2 className="text-2xl font-bold text-foreground tracking-tight">
@@ -308,7 +320,95 @@ export default function CheckInForm({ lang }: { lang: string }) {
         </form>
       </motion.div>
 
-      {/* SUCCESS POPUP */}
+      {/* MODAL: KHÁCH HÀNG KHÔNG TỒN TẠI */}
+      <AnimatePresence>
+        {showCustomerNotFound && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/95 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-card border border-border/50 rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+                    <AlertTriangle size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground">
+                      {lang === "vi" ? "Xe chưa đăng ký" : "Vehicle Not Registered"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {lang === "vi" ? "Thông tin chưa có trong hệ thống" : "Information not found in system"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCustomerNotFound(false)}
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-muted-foreground" />
+                </button>
+              </div>
+
+              {/* Message */}
+              <div className="space-y-4 mb-8">
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                  <div className="flex items-start gap-3">
+                    <Info size={18} className="text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-900 mb-2">
+                        {lang === "vi" ? "Biển số xe này chưa đăng ký" : "This license plate is not registered"}
+                      </p>
+                      <ul className="text-sm text-amber-800 space-y-1 list-disc pl-4">
+                        <li>{lang === "vi" ? "Vui lòng đăng ký thông tin khách hàng mới" : "Please register as a new customer"}</li>
+                        <li>{lang === "vi" ? "Miễn phí đăng ký lần đầu" : "First registration is free"}</li>
+                        <li>{lang === "vi" ? "Thông tin sẽ được lưu cho lần sau" : "Information will be saved for next time"}</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="font-medium">Biển số:</span>
+                  <code className="bg-muted px-3 py-1 rounded-lg font-mono text-foreground font-bold">
+                    {formData.plate || "N/A"}
+                  </code>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <motion.button
+                  onClick={handleRegisterNewCustomer}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full bg-gradient-to-r from-accent to-accent/90 hover:from-accent hover:to-accent text-accent-foreground font-semibold py-4 rounded-xl flex items-center justify-center gap-3 shadow-lg shadow-accent/25 transition-all"
+                >
+                  <User size={20} />
+                  <span>{lang === "vi" ? "Đăng ký khách hàng mới" : "Register New Customer"}</span>
+                  <ChevronRight size={18} />
+                </motion.button>
+
+                <button
+                  onClick={() => setShowCustomerNotFound(false)}
+                  className="w-full border-2 border-border hover:bg-muted/30 text-foreground font-medium py-4 rounded-xl transition-colors"
+                >
+                  {lang === "vi" ? "Kiểm tra lại biển số" : "Check License Plate Again"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: CHECK-IN THÀNH CÔNG */}
       <AnimatePresence>
         {showSuccess && (
           <motion.div 
@@ -322,14 +422,19 @@ export default function CheckInForm({ lang }: { lang: string }) {
               animate={{ scale: 1, opacity: 1 }}
               className="bg-card border border-border/50 rounded-3xl p-8 max-w-sm w-full shadow-2xl"
             >
+              {/* Header */}
               <div className="flex justify-between items-start mb-8">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
                     <Zap size={24} className="text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-foreground">Check-in thành công!</h3>
-                    <p className="text-sm text-muted-foreground">Thông tin đã được lưu trữ</p>
+                    <h3 className="text-xl font-bold text-foreground">
+                      {lang === "vi" ? "Check-in thành công!" : "Check-in Successful!"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {lang === "vi" ? "Thông tin đã được lưu trữ" : "Information has been saved"}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -340,33 +445,41 @@ export default function CheckInForm({ lang }: { lang: string }) {
                 </button>
               </div>
 
-              {/* STATS */}
+              {/* Stats */}
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-2xl p-5">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Tháng này</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    {lang === "vi" ? "Tháng này" : "This Month"}
+                  </p>
                   <p className="text-3xl font-bold text-primary">{stats.monthly}</p>
-                  <p className="text-xs text-muted-foreground mt-1">lượt sạc</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {lang === "vi" ? "lượt sạc" : "charges"}
+                  </p>
                 </div>
                 <div className="bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/20 rounded-2xl p-5">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Tổng cộng</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    {lang === "vi" ? "Tổng cộng" : "Total"}
+                  </p>
                   <p className="text-3xl font-bold text-accent">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground mt-1">lượt sạc</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {lang === "vi" ? "lượt sạc" : "charges"}
+                  </p>
                 </div>
               </div>
 
-              {/* NEXT STEPS */}
+              {/* Next Steps */}
               <div className="space-y-4">
                 <div className="bg-muted/30 rounded-xl p-4">
                   <p className="text-sm font-medium text-foreground mb-2">
                     <Trophy size={16} className="inline mr-2 text-yellow-500" />
-                    Bước tiếp theo
+                    {lang === "vi" ? "Bước tiếp theo" : "Next Steps"}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Vui lòng cắm súng sạc để bắt đầu quá trình sạc
+                    {lang === "vi" ? "Vui lòng cắm súng sạc để bắt đầu quá trình sạc" : "Please plug in the charging gun to start"}
                   </p>
                 </div>
 
-                {/* ZALO BUTTON */}
+                {/* Zalo Button */}
                 <a
                   href="https://zalo.me/g/isscys844"
                   target="_blank"
@@ -374,11 +487,13 @@ export default function CheckInForm({ lang }: { lang: string }) {
                   className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-3 shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02]"
                 >
                   <MessageCircle size={20} />
-                  <span>Tham gia nhóm Zalo hỗ trợ</span>
+                  <span>{lang === "vi" ? "Tham gia nhóm Zalo hỗ trợ" : "Join Zalo Support Group"}</span>
                 </a>
 
                 <p className="text-xs text-center text-muted-foreground/70 pt-2">
-                  Nhận thông báo quà tặng & hỗ trợ kỹ thuật 24/7
+                  {lang === "vi" 
+                    ? "Nhận thông báo quà tặng & hỗ trợ kỹ thuật 24/7" 
+                    : "Receive gift notifications & 24/7 technical support"}
                 </p>
               </div>
             </motion.div>
