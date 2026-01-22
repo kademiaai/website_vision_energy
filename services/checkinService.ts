@@ -1,66 +1,81 @@
 import { supabase } from "@/lib/supabase";
 
-// CẤU HÌNH THỜI GIAN CHẶN (Phút)
-const CHECKIN_INTERVAL = 5; // Đổi thành 120 khi chạy thật
+const CHECKIN_INTERVAL = 5; 
 
 export const processCheckIn = async (plate: string, name?: string, phone?: string) => {
-  // --- BƯỚC 0: KIỂM TRA KHOẢNG CÁCH THỜI GIAN (ANTI-FRAUD) ---
-  const { data: sessions, error: fetchError } = await supabase
+  /**
+   * CHUẨN HÓA BIỂN SỐ (Cực kỳ quan trọng):
+   * 1. .toUpperCase(): Chuyển chữ thường thành chữ hoa.
+   * 2. .replace(/[^A-Z0-9]/g, ""): Loại bỏ tất cả ký tự đặc biệt như dấu gạch ngang (-), 
+   * dấu chấm (.), khoảng trắng. 
+   * Ví dụ: "51F-029.42" hoặc "51f 02942" đều trở thành "51F02942"
+   */
+  const cleanPlate = plate.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+  // --- BƯỚC 0: KIỂM TRA COOLDOWN (Dùng biển số đã làm sạch) ---
+  const { data: lastSession } = await supabase
     .from("charging_sessions")
     .select("start_time")
-    .eq("license_plate", plate)
+    .eq("license_plate", cleanPlate)
     .order("start_time", { ascending: false })
-    .limit(1);
+    .limit(1)
+    .maybeSingle();
 
-  if (fetchError) {
-    console.error("Lỗi kiểm tra lịch sử sạc:", fetchError.message);
-  }
-
-  // Kiểm tra nếu tìm thấy ít nhất 1 phiên sạc trước đó
-  if (sessions && sessions.length > 0) {
-    const lastSession = sessions[0]; // Lấy phiên sạc gần nhất từ mảng
+  if (lastSession) {
     const lastTime = new Date(lastSession.start_time).getTime();
     const now = new Date().getTime();
     const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
 
-    // Nếu thời gian chờ chưa đủ (Cooldown)
     if (diffMinutes < CHECKIN_INTERVAL) {
       throw new Error(`COOLDOWN:${CHECKIN_INTERVAL - diffMinutes}`);
     }
   }
 
-  // 1. Xử lý thông tin khách hàng 
-  if (name || phone) {
-    const { error: customerError } = await supabase.from("customers").upsert({
-      license_plate: plate,
-      full_name: name,
-      phone_number: phone,
-    }, { onConflict: 'license_plate' });
-    if (customerError) throw customerError;
-  }
+  // --- BƯỚC 1: TRUY VẤN KHÁCH HÀNG ---
+  // Tìm kiếm dựa trên biển số đã xóa dấu gạch
+  const { data: existingCustomer, error: fetchError } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("license_plate", cleanPlate)
+    .maybeSingle();
 
-  // 2. Ghi nhận lượt sạc mới
-  const { error: sessionError } = await supabase
-    .from("charging_sessions")
-    .insert([{ license_plate: plate }]);
-  if (sessionError) throw sessionError;
+  if (fetchError) console.error("Lỗi truy vấn khách hàng:", fetchError.message);
 
-  // 3. Lấy thống kê 
-  const { count: totalCount } = await supabase
-    .from("charging_sessions")
-    .select("*", { count: 'exact', head: true })
-    .eq("license_plate", plate);
+  // --- BƯỚC 2: TÍNH TOÁN LƯỢT SẠC ---
+  // Lấy giá trị total_points từ Excel (nếu có) cộng thêm 1
+  const currentPoints = existingCustomer?.total_points || 0;
+  const newTotalPoints = currentPoints + 1;
 
-  const date = new Date();
-  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
+  // --- BƯỚC 3: CẬP NHẬT/TẠO MỚI (UPSERT) ---
+  const { error: upsertError } = await supabase.from("customers").upsert({
+    license_plate: cleanPlate,
+    total_points: newTotalPoints,
+    // Giữ lại tên/sđt cũ từ Excel nếu lần này khách không nhập thông tin mới
+    full_name: name?.trim() || existingCustomer?.full_name || "Khách hàng mới",
+    phone_number: phone?.trim() || existingCustomer?.phone_number || null,
+  }, { onConflict: 'license_plate' });
+
+  if (upsertError) throw upsertError;
+
+  // --- BƯỚC 4: GHI NHẬN LỊCH SỬ CHI TIẾT ---
+  await supabase.from("charging_sessions").insert([{ 
+    license_plate: cleanPlate,
+    status: 'completed',
+    station_id: 'station_01' 
+  }]);
+
+  // --- BƯỚC 5: TÍNH LƯỢT SẠC TRONG THÁNG ---
+  const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const { count: monthlyCount } = await supabase
     .from("charging_sessions")
     .select("*", { count: 'exact', head: true })
-    .eq("license_plate", plate)
+    .eq("license_plate", cleanPlate)
     .gte("start_time", firstDayOfMonth);
 
   return {
-    monthlyCount: monthlyCount || 0,
-    totalCount: totalCount || 0
+    isNewCustomer: !existingCustomer, 
+    customerInfo: existingCustomer,
+    monthlyCount: monthlyCount || 1,
+    totalCount: newTotalPoints
   };
 };
