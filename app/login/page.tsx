@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { 
+import {
   Zap, Mail, Lock, LogIn, Shield, Eye, EyeOff,
   Battery, Car, Clock
 } from "lucide-react";
@@ -19,16 +19,34 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    
-    if (error) {
-      setError("Email hoặc mật khẩu không chính xác");
-    } else {
-      router.push("/admin");
+
+    try {
+      // 1. Thực hiện đăng nhập
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password
+      });
+
+      if (authError) {
+        setError("Email hoặc mật khẩu không chính xác");
+        setLoading(false);
+        return;
+      }
+
+      if (data?.session) {
+        // 2. Làm mới router để xóa cache trang cũ
+        router.refresh();
+
+        // 3. Đợi một chút để trình duyệt ghi nhận Cookie (Tránh lỗi Race Condition)
+        setTimeout(() => {
+          // 4. Chuyển hướng cưỡng bức để Middleware kiểm tra lại từ Server
+          window.location.replace("/admin");
+        }, 150);
+      }
+    } catch (err) {
+      setError("Đã xảy ra lỗi không xác định");
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -106,7 +124,7 @@ export default function LoginPage() {
                   </div>
                 </div>
               </div>
-              
+
               <h2 className="text-2xl font-bold text-foreground mb-2">
                 Đăng nhập hệ thống quản lý
               </h2>
@@ -134,9 +152,9 @@ export default function LoginPage() {
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                  <input 
-                    type="email" 
-                    placeholder="admin@visionenergy.vn" 
+                  <input
+                    type="email"
+                    placeholder="admin@visionenergy.vn"
                     className="admin-input pl-10"
                     value={email}
                     onChange={(e) => {
@@ -156,9 +174,9 @@ export default function LoginPage() {
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="••••••••" 
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
                     className="admin-input pl-10 pr-10"
                     value={password}
                     onChange={(e) => {
@@ -180,8 +198,8 @@ export default function LoginPage() {
               </div>
 
               {/* Submit Button */}
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={loading}
                 className="w-full bg-primary text-primary-foreground py-3.5 rounded-lg font-medium hover:opacity-90 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >

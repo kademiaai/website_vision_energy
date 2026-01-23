@@ -22,16 +22,22 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  // QUAN TRỌNG: Dùng getUser() thay vì getSession() để đảm bảo tính xác thực
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Chặn truy cập /admin nếu chưa login
-  if (request.nextUrl.pathname.startsWith('/admin') && !session) {
+  // Nếu truy cập /admin mà không có user -> Đá về /login
+  if (request.nextUrl.pathname.startsWith('/admin') && !user) {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Nếu đã login mà cố vào /login -> Đá sang /admin
+  if (request.nextUrl.pathname === '/login' && user) {
+    return NextResponse.redirect(new URL('/admin', request.url))
   }
 
   return response
 }
 
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*', '/login'],
 }
