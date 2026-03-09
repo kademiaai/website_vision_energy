@@ -6,7 +6,10 @@ import {
   ResponsiveContainer, Cell, PieChart, Pie, 
   Sector
 } from "recharts";
-import { Trophy, TrendingUp, PieChart as PieChartIcon, BarChart2 } from "lucide-react";
+import { 
+  Trophy, TrendingUp, PieChart as PieChartIcon, BarChart2, 
+  Table, ChevronRight, Award, Medal, Crown, Calendar, Phone, User
+} from "lucide-react";
 import { sessionService, ChartData } from "@/services/sessionService";
 
 interface TopCustomersChartProps {
@@ -43,8 +46,10 @@ const renderActiveShape = (props: any) => {
 export default function TopCustomersChart({ filterType, startDate, endDate }: TopCustomersChartProps) {
   const [data, setData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chartType, setChartType] = useState<'bar' | 'pie'>('bar');
+  const [viewType, setViewType] = useState<'bar' | 'pie' | 'table'>('bar');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [sortField, setSortField] = useState<'rank' | 'sessions' | 'name'>('sessions');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     loadChartData();
@@ -132,6 +137,44 @@ export default function TopCustomersChart({ filterType, startDate, endDate }: To
     setActiveIndex(index);
   };
 
+  // Hàm lấy icon cho top
+  const getRankIcon = (index: number) => {
+    switch(index) {
+      case 0: return <Crown className="text-yellow-500" size={18} />;
+      case 1: return <Medal className="text-gray-400" size={18} />;
+      case 2: return <Medal className="text-amber-600" size={18} />;
+      default: return <span className="text-xs font-bold text-muted-foreground w-5 text-center">#{index + 1}</span>;
+    }
+  };
+
+  // Hàm xử lý sort cho table
+  const handleSort = (field: 'rank' | 'sessions' | 'name') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Sắp xếp dữ liệu cho table
+  const sortedData = [...data].sort((a, b) => {
+    if (sortField === 'sessions') {
+      return sortDirection === 'desc' ? b.sessions - a.sessions : a.sessions - b.sessions;
+    } else if (sortField === 'name') {
+      const nameA = a.fullName || a.license_plate;
+      const nameB = b.fullName || b.license_plate;
+      return sortDirection === 'desc' 
+        ? nameB.localeCompare(nameA) 
+        : nameA.localeCompare(nameB);
+    } else {
+      // Mặc định sort theo rank
+      return sortDirection === 'desc' 
+        ? data.indexOf(b) - data.indexOf(a) 
+        : data.indexOf(a) - data.indexOf(b);
+    }
+  });
+
   if (loading) {
     return (
       <div className="admin-card p-8">
@@ -182,37 +225,51 @@ export default function TopCustomersChart({ filterType, startDate, endDate }: To
           </div>
         </div>
 
-        {/* Chart Type Toggle */}
+        {/* View Type Toggle - 3 buttons */}
         <div className="flex items-center gap-2 bg-muted/30 rounded-lg p-1">
           <button
-            onClick={() => setChartType('bar')}
+            onClick={() => setViewType('bar')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              chartType === 'bar' 
+              viewType === 'bar' 
                 ? 'bg-primary text-primary-foreground shadow-sm' 
                 : 'text-muted-foreground hover:text-foreground'
             }`}
+            title="Biểu đồ cột"
           >
             <BarChart2 size={16} />
-            <span>Cột</span>
+            <span className="hidden sm:inline">Cột</span>
           </button>
           <button
-            onClick={() => setChartType('pie')}
+            onClick={() => setViewType('pie')}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              chartType === 'pie' 
+              viewType === 'pie' 
                 ? 'bg-primary text-primary-foreground shadow-sm' 
                 : 'text-muted-foreground hover:text-foreground'
             }`}
+            title="Biểu đồ tròn"
           >
             <PieChartIcon size={16} />
-            <span>Tròn</span>
+            <span className="hidden sm:inline">Tròn</span>
+          </button>
+          <button
+            onClick={() => setViewType('table')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              viewType === 'table' 
+                ? 'bg-primary text-primary-foreground shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title="Bảng dữ liệu"
+          >
+            <Table size={16} />
+            <span className="hidden sm:inline">Bảng</span>
           </button>
         </div>
       </div>
 
-      {/* Chart Content */}
+      {/* Content based on view type */}
       <div className="p-6">
-        <ResponsiveContainer width="100%" height={400}>
-          {chartType === 'bar' ? (
+        {viewType === 'bar' && (
+          <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis 
@@ -238,7 +295,11 @@ export default function TopCustomersChart({ filterType, startDate, endDate }: To
                 ))}
               </Bar>
             </BarChart>
-          ) : (
+          </ResponsiveContainer>
+        )}
+
+        {viewType === 'pie' && (
+          <ResponsiveContainer width="100%" height={400}>
             <PieChart>
               <Pie
                 data={data}
@@ -278,31 +339,143 @@ export default function TopCustomersChart({ filterType, startDate, endDate }: To
                 }}
               />
             </PieChart>
-          )}
-        </ResponsiveContainer>
-      </div>
+          </ResponsiveContainer>
+        )}
 
-      {/* Stats Summary */}
-      <div className="p-6 border-t border-border bg-muted/20">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {data.slice(0, 5).map((item, index) => (
-            <div key={item.license_plate} className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground truncate" title={item.license_plate}>
-                  {index + 1}. {item.license_plate}
-                </p>
-                <p className="text-xs text-muted-foreground">{item.sessions} lượt</p>
+        {viewType === 'table' && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <button 
+                      onClick={() => handleSort('rank')}
+                      className="flex items-center gap-1 hover:text-foreground"
+                    >
+                      Hạng
+                      {sortField === 'rank' && (
+                        <span>{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <button 
+                      onClick={() => handleSort('name')}
+                      className="flex items-center gap-1 hover:text-foreground"
+                    >
+                      Biển số / Tên
+                      {sortField === 'name' && (
+                        <span>{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Thông tin
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <button 
+                      onClick={() => handleSort('sessions')}
+                      className="flex items-center gap-1 ml-auto hover:text-foreground"
+                    >
+                      Lượt sạc
+                      {sortField === 'sessions' && (
+                        <span>{sortDirection === 'desc' ? '↓' : '↑'}</span>
+                      )}
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {sortedData.map((item, index) => {
+                  const originalIndex = data.findIndex(d => d.license_plate === item.license_plate);
+                  return (
+                    <tr key={item.license_plate} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {getRankIcon(originalIndex)}
+                          <span className="text-xs text-muted-foreground">
+                            #{originalIndex + 1}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-2 h-2 rounded-full" 
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <div>
+                            <div className="font-mono font-bold text-sm text-primary">
+                              {item.license_plate}
+                            </div>
+                            {item.fullName && item.fullName !== 'Khách vãng lai' && (
+                              <div className="text-xs text-muted-foreground">
+                                {item.fullName}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          {item.phone_number ? (
+                            <div className="flex items-center gap-1">
+                              <Phone size={12} />
+                              <span>{item.phone_number}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground/50">---</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-right">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full">
+                          <span className="font-bold text-primary">{item.sessions}</span>
+                          <span className="text-xs text-muted-foreground">lượt</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* Table Footer với thống kê */}
+            <div className="mt-4 pt-4 border-t border-border flex justify-between items-center text-sm">
+              <div className="text-muted-foreground">
+                Tổng số: <span className="font-bold text-foreground">{data.length}</span> khách hàng
+              </div>
+              <div className="text-muted-foreground">
+                Tổng lượt: <span className="font-bold text-primary">{totalSessions}</span>
               </div>
             </div>
-          ))}
-        </div>
-        {data.length > 5 && (
-          <p className="text-xs text-center text-muted-foreground mt-3">
-            và {data.length - 5} khách hàng khác...
-          </p>
+          </div>
         )}
       </div>
+
+      {/* Stats Summary - chỉ hiển thị khi không phải table view */}
+      {viewType !== 'table' && (
+        <div className="p-6 border-t border-border bg-muted/20">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {data.slice(0, 5).map((item, index) => (
+              <div key={item.license_plate} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground truncate" title={item.license_plate}>
+                    {index + 1}. {item.license_plate}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{item.sessions} lượt</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {data.length > 5 && (
+            <p className="text-xs text-center text-muted-foreground mt-3">
+              và {data.length - 5} khách hàng khác...
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

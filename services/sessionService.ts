@@ -32,6 +32,7 @@ export interface ChartData {
   name: string; // Tên hiển thị (rút gọn nếu cần)
   fullName: string; // Tên đầy đủ
   license_plate: string;
+  phone_number: string | null; // THÊM DÒNG NÀY
   sessions: number;
   color?: string;
 }
@@ -207,6 +208,7 @@ export const sessionService = {
         name: displayName,
         fullName: customer.full_name || 'Khách vãng lai',
         license_plate: customer.license_plate,
+        phone_number: customer.phone_number, // THÊM DÒNG NÀY
         sessions: customer.total_sessions,
         color: colors[index % colors.length]
       };
