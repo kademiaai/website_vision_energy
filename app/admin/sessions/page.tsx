@@ -1,13 +1,15 @@
+// app/admin/sessions/page.tsx
 "use client";
 import { useEffect, useState } from "react";
 import { sessionService } from "@/services/sessionService";
 import { 
   Search, Download, ChevronLeft, ChevronRight, 
   RefreshCw, Calendar, ChevronDown, ArrowUpRight,
-  Filter, FileText, Clock, Battery
+  FileText, Clock, Battery, TrendingUp
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
+import TopCustomersChart from "@/components/TopCustomersChart";
 
 export default function SessionsPage() {
   const [data, setData] = useState<any[]>([]);
@@ -37,7 +39,9 @@ export default function SessionsPage() {
     }
   };
 
-  useEffect(() => { loadData(); }, [filterType, dateRange]);
+  useEffect(() => { 
+    loadData(); 
+  }, [filterType, dateRange]);
 
   // Logic Tìm kiếm & Phân trang
   const filteredData = data.filter(item => 
@@ -94,7 +98,7 @@ export default function SessionsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="admin-card">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-primary/10 rounded-lg">
@@ -120,8 +124,11 @@ export default function SessionsPage() {
               <p className="text-sm text-muted-foreground">Khoảng thời gian</p>
               <p className="text-2xl font-bold text-foreground">
                 {filterType === "today" ? "Hôm nay" : 
+                 filterType === "yesterday" ? "Hôm qua" :
                  filterType === "7days" ? "7 ngày" : 
                  filterType === "30days" ? "30 ngày" : 
+                 filterType === "month" ? "Tháng này" :
+                 filterType === "lastMonth" ? "Tháng trước" :
                  "Tùy chỉnh"}
               </p>
             </div>
@@ -139,7 +146,28 @@ export default function SessionsPage() {
             </div>
           </div>
         </div>
+
+        <div className="admin-card">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-purple-500/10 rounded-lg">
+              <TrendingUp className="text-purple-500" size={20} />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Khách hàng</p>
+              <p className="text-2xl font-bold text-foreground">
+                {new Set(data.map(s => s.license_plate)).size}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* TOP 10 KHÁCH HÀNG - DẠNG CHART */}
+      <TopCustomersChart 
+        filterType={filterType}
+        startDate={dateRange.start}
+        endDate={dateRange.end}
+      />
 
       {/* Search & Filter */}
       <div className="admin-card">
@@ -153,6 +181,7 @@ export default function SessionsPage() {
                 type="text" 
                 placeholder="Tìm theo biển số, tên khách hàng..." 
                 className="admin-input pl-10"
+                value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
