@@ -162,13 +162,6 @@ export default function SessionsPage() {
         </div>
       </div>
 
-      {/* TOP 10 KHÁCH HÀNG - DẠNG CHART */}
-      <TopCustomersChart 
-        filterType={filterType}
-        startDate={dateRange.start}
-        endDate={dateRange.end}
-      />
-
       {/* Search & Filter */}
       <div className="admin-card">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
@@ -261,6 +254,15 @@ export default function SessionsPage() {
           </div>
         )}
       </div>
+      
+      {/* TOP 10 KHÁCH HÀNG - DẠNG CHART */}
+      <TopCustomersChart 
+        filterType={filterType}
+        startDate={dateRange.start}
+        endDate={dateRange.end}
+      />
+
+
 
       {/* Table */}
       <div className="admin-card overflow-hidden p-0">
