@@ -1,4 +1,4 @@
-// @/services/customerService.ts
+// @/app/services/customerService.ts
 import { supabase } from "@/lib/supabase";
 
 export interface DateFilter {

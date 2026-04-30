@@ -1,4 +1,4 @@
-// @/services/sessionService.ts
+// @/app/services/sessionService.ts
 import { supabase } from "@/lib/supabase";
 
 export interface SessionFilter {

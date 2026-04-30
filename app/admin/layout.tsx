@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, History, Users, Settings, LogOut, Zap,
-  Sun, Moon, User
+  Sun, Moon, User, Trophy
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [darkMode, setDarkMode] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Kiểm tra theme từ localStorage và system preference
   useEffect(() => {
@@ -57,25 +58,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Tổng quan", href: "/admin", icon: <LayoutDashboard size={20} /> },
     { name: "Lịch sử lượt sạc", href: "/admin/sessions", icon: <History size={20} /> },
     { name: "Khách hàng", href: "/admin/customers", icon: <Users size={20} /> },
+    { name: "Xếp hạng & Thưởng", href: "/admin/leaderboard", icon: <Trophy size={20} /> },
     // { name: "Cài đặt", href: "/admin/settings", icon: <Settings size={20} /> },
   ];
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar - Sticky cho desktop */}
-      <div className="sticky top-0 h-screen w-64 overflow-y-auto">
-        <div className="h-full flex flex-col bg-card border-r border-border">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Sticky for desktop, Fixed for mobile */}
+      <div className={`
+        fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="h-full flex flex-col bg-card border-r border-border shadow-2xl lg:shadow-none">
           {/* Logo */}
-          <div className="p-6 border-b border-border">
+          <div className="p-6 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-gradient-to-br from-primary to-accent rounded-lg text-white">
                 <Zap size={22} />
               </div>
               <div>
-                <div className="font-bold text-foreground text-lg">VISION ENERGY</div>
-                <div className="text-xs text-muted-foreground">ADMIN SYSTEM</div>
+                <div className="font-bold text-foreground text-lg leading-tight">VISION ENERGY</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">ADMIN SYSTEM</div>
               </div>
             </div>
+            {/* Close button for mobile */}
+            <button 
+              className="lg:hidden p-2 hover:bg-muted rounded-lg"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <LogOut size={20} className="rotate-180" />
+            </button>
           </div>
 
           {/* User Info */}
@@ -94,7 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto" onClick={() => setSidebarOpen(false)}>
             {menuItems.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -147,27 +167,40 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar - Sticky */}
         <header className="sticky top-0 z-20 bg-card/80 backdrop-blur-sm border-b border-border">
-          <div className="px-6 py-4">
+          <div className="px-4 lg:px-6 py-4">
             <div className="flex items-center justify-between">
-              {/* Left side - Page title */}
-              <div className="text-sm text-muted-foreground">
-                {menuItems.find(item => pathname === item.href)?.name || 'Dashboard'}
+              {/* Left side - Menu Toggle & Page title */}
+              <div className="flex items-center gap-4">
+                <button 
+                  className="lg:hidden p-2 hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <LayoutDashboard size={24} className="text-primary" />
+                </button>
+                <div className="text-sm font-semibold text-foreground">
+                  {menuItems.find(item => pathname === item.href)?.name || 'Dashboard'}
+                </div>
               </div>
               
               {/* Right side - Theme indicator */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className={`w-2 h-2 rounded-full ${darkMode ? 'bg-primary' : 'bg-accent'}`}></div>
-                {darkMode ? 'Dark Mode' : 'Light Mode'}
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <div className="hidden sm:flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${darkMode ? 'bg-primary' : 'bg-accent'}`}></div>
+                  {darkMode ? 'Dark Mode' : 'Light Mode'}
+                </div>
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                  <User size={16} />
+                </div>
               </div>
             </div>
           </div>
         </header>
 
         {/* Page Content - Scrollable area */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 p-4 lg:p-8 overflow-x-hidden">
           {children}
         </main>
       </div>

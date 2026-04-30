@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { sessionService } from "@/services/sessionService";
+import { sessionService } from "@/app/services/sessionService";
 import { 
   Calendar, Users, Car, RefreshCw, ChevronRight, ArrowUpRight,
   ChevronDown

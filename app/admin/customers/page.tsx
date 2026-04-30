@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { customerService } from "@/services/customerService";
+import { customerService } from "@/app/services/customerService";
 import { 
   Search, UserCircle, Phone, Car, ChevronDown, 
   Trophy, History, Star, RefreshCw,

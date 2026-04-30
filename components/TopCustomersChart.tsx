@@ -10,7 +10,7 @@ import {
   Trophy, TrendingUp, PieChart as PieChartIcon, BarChart2, 
   Table, ChevronRight, Award, Medal, Crown, Calendar, Phone, User
 } from "lucide-react";
-import { sessionService, ChartData } from "@/services/sessionService";
+import { sessionService, ChartData } from "@/app/services/sessionService";
 
 interface TopCustomersChartProps {
   filterType: string;
