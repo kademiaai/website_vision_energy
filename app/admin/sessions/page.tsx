@@ -1,7 +1,7 @@
 // app/admin/sessions/page.tsx
 "use client";
 import { useEffect, useState } from "react";
-import { sessionService } from "@/services/sessionService";
+import { sessionService } from "@/app/services/sessionService";
 import { 
   Search, Download, ChevronLeft, ChevronRight, 
   RefreshCw, Calendar, ChevronDown, ArrowUpRight,
@@ -289,9 +289,9 @@ export default function SessionsPage() {
               <tr>
                 <th className="px-6 py-4">Thời gian</th>
                 <th className="px-6 py-4">Thông tin xe</th>
-                <th className="px-6 py-4">Khách hàng</th>
-                <th className="px-6 py-4">Trạm</th>
-                <th className="px-6 py-4"></th>
+                <th className="px-6 py-4 hidden sm:table-cell">Khách hàng</th>
+                <th className="px-6 py-4 hidden md:table-cell">Trạm</th>
+                <th className="px-6 py-4 text-right">Hành động</th>
               </tr>
             </thead>
             <tbody>
@@ -327,9 +327,9 @@ export default function SessionsPage() {
                         {item.license_plate}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 hidden sm:table-cell">
                       <div>
-                        <div className="text-sm font-medium text-foreground">
+                        <div className="text-sm font-medium text-foreground truncate max-w-[120px]">
                           {item.customers?.full_name || "Khách vãng lai"}
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -337,12 +337,12 @@ export default function SessionsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 hidden md:table-cell">
                       <div className="text-sm font-medium text-foreground">
                         Trạm #{item.station_id}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-right">
                       <Link 
                         href={`/admin/sessions/${item.id}`}
                         className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-foreground hover:bg-primary hover:text-primary-foreground transition-colors"

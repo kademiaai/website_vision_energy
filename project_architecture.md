@@ -1,7 +1,7 @@
 # 🏗️ Vision Energy — Project Architecture
 
 ## 1. Project Identity
-**Vision Energy** is a modern, mobile-first management system for vehicle charging stations. It enables efficient tracking of charging sessions through license plate recognition/entry and provides a comprehensive dashboard for station administrators.
+**Vision Energy** is a modern, mobile-first management system for vehicle charging stations. It enables efficient tracking of charging sessions through license plate entry and provides a comprehensive dashboard for station administrators, including an AI-powered reward system.
 
 ---
 
@@ -10,33 +10,40 @@
 - **Runtime**: [React 19](https://react.dev/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **Backend-as-a-Service**: [Supabase](https://supabase.com/) (PostgreSQL, Auth, SSR)
+- **Backend-as-a-Service**: [Supabase](https://supabase.com/) (PostgreSQL, Auth, SSR, Storage)
+- **AI / OCR**: [Puter AI](https://puter.com/ai) via OpenAI-compatible REST API (Claude 3 Haiku/GPT-4o-mini, Zero-popup)
 - **Animations**: [Framer Motion](https://www.framer.com/motion/)
 - **Icons**: [Lucide React](https://lucide.dev/)
 
 ---
 
 ## 3. High-Level Architecture
-The project follows a **Service-Oriented Architecture** within a Next.js App Router structure. Business logic is decoupled from UI components and resides in a dedicated service layer.
+The project follows a **Service-Oriented Architecture** within a Next.js App Router structure. Business logic is decoupled from UI components and resides in a dedicated service layer within the `app` directory.
 
 ### Directory Structure
 ```text
 /
 ├── app/                  # Next.js App Router (Routes & Pages)
-│   ├── admin/            # Protected Admin Dashboard & Management
-│   ├── login/            # Authentication Pages
+│   ├── admin/            # Dashboard, Session History, Customer Management
+│   │   └── leaderboard/  # Reward management & rankings
+│   ├── login/            # Authentication
+│   ├── rewards/          # [Public] Customer Reward Portal (OCR)
+│   ├── services/         # Business Logic Layer (Supabase Interactions)
+│   │   ├── checkinService.ts
+│   │   ├── customerService.ts
+│   │   ├── rewardService.ts
+│   │   └── sessionService.ts
 │   └── page.tsx          # Public Customer Check-in (Landing Page)
-├── services/             # Business Logic Layer (Supabase Interactions)
-│   ├── checkinService.ts # Core check-in & cooldown logic
-│   ├── customerService.ts# Customer CRUD & points management
-│   └── sessionService.ts # Charging session tracking & analytics
+├── features/             # Feature Design Documents
+│   └── top-10-monthly-rewards.md
 ├── components/           # UI Components
 │   ├── forms/            # Complex forms (CheckInForm, etc.)
-│   ├── layout/           # Global Header, Footer, Providers
-│   ├── sections/         # Page sections (Amenities, Hero)
-│   └── ui/               # Base UI components (Buttons, Inputs)
+│   ├── layout/           # Global Sidebar, Header, Providers
+│   └── ui/               # Base UI components (Buttons, Inputs, etc.)
 ├── lib/                  # Core Utilities & Configurations
-│   └── supabase.ts       # Supabase client initialization
+│   ├── supabase.ts       # Supabase client
+│   ├── imageUtils.ts     # Client-side image resizing for OCR
+│   └── timezone.ts       # Vietnam (UTC+7) date utilities
 ├── constants/            # Application Constants & Translations
 ├── public/               # Static Assets
 └── Instructions/         # Project Guidelines & Master Prompts
@@ -45,51 +52,57 @@ The project follows a **Service-Oriented Architecture** within a Next.js App Rou
 ---
 
 ## 4. Domain Model & Database
-The application relies on two primary entities in the PostgreSQL database:
+The application relies on three primary entities in the PostgreSQL database:
 
 ### `customers`
 Tracks unique vehicle owners.
 - `license_plate` (Primary Key, Normalized)
-- `full_name`
-- `phone_number`
+- `full_name`, `phone_number`
 - `total_points` (Lifetime charging sessions)
 
 ### `charging_sessions`
 Records every individual charging event.
-- `id` (UUID)
-- `license_plate` (Foreign Key)
-- `start_time`
-- `status` (completed, active)
-- `station_id`
+- `id` (UUID), `license_plate` (FK)
+- `start_time`, `status` (completed, active)
+
+### `rewards`
+Manages monthly ranking rewards and ID verification.
+- `id` (UUID), `license_plate` (FK)
+- `month`, `year` (Integer)
+- `id_full_name`, `id_number` (Extracted via OCR)
+- `id_card_photo_url` (Storage Path)
+- `token` (Unique portal access token)
+- `status` (eligible, processing, completed, rejected)
 
 ---
 
 ## 5. Core Workflows
 
 ### 🏎️ Customer Check-in
-1. **Plate Normalization**: Inputs like `51H-123.45` are stripped of special characters and capitalized to `51H12345` for data integrity.
-2. **Cooldown Check**: The system enforces a **30-minute cooldown** between sessions for the same vehicle to prevent accidental double-entries.
-3. **Upsert Logic**: New plates trigger customer registration; existing plates increment the `total_points` counter.
-4. **Session Logging**: A new entry is created in `charging_sessions` for every successful check-in.
+1. **Plate Normalization**: Inputs like `51H-123.45` are stripped to `51H12345` for data integrity.
+2. **Cooldown Check**: Enforces a **30-minute cooldown** per vehicle.
+3. **Session Logging**: Each check-in increments the customer's `total_points`.
 
-### 📊 Admin Monitoring
-- **Stats Calculation**: Aggregates data for total sessions, unique customers, and average sessions per day.
-- **Real-time Updates**: (Planned/Ongoing) Leveraging Supabase Realtime to push new check-ins to the dashboard without page refreshes.
+### 🏆 Monthly Rewards & OCR
+1. **Leaderboard**: Admin identifies top users for a specific month (Vietnam UTC+7).
+2. **Token Generation**: Admin generates unique links for selected winners.
+3. **Identity Verification**: Winners verify their plate + phone on a public portal.
+4. **AI OCR**: Users scan their CCCD. Images are resized client-side to < 1MB, then processed server-side via Puter's REST API using Claude 3 Haiku or GPT-4o-Mini for precision extraction.
+5. **Approval**: Admin reviews extracted data and ID photos before marking as `completed`.
 
 ---
 
 ## 6. Coding Standards & Guidelines
-As defined in `Instructions/CLAUDE.md`, the following rules apply:
 - **Surgical Changes**: Modify only what is requested. Maintain existing code style and formatting.
-- **Simplicity First**: Avoid speculative abstractions. Focus on readable, maintainable code.
-- **Type Safety**: No usage of `any`. All interfaces and types must be explicitly defined.
-- **Mobile-First UX**: The customer-facing check-in form must be optimized for field usage (large touch targets, clear feedback).
+- **Timezone Enforcement**: All period calculations use **UTC+7 (ICT)** via `lib/timezone.ts`.
+- **Security**: ID photos are stored in private buckets; admin views them via short-lived signed URLs.
+- **Type Safety**: Zero usage of `any`. Explicit interfaces for all data structures.
+- **Robustness**: OCR parsing handles AI-generated Markdown JSON blocks.
 
 ---
 
-## 7. Roadmap (Based on FieldOps Instructions)
-Future enhancements inspired by the `FieldOps` roadmap include:
-- [ ] **Leaderboard**: Ranking customers based on charging frequency.
-- [ ] **Zalo Integration**: Real-time notifications and support via Zalo.
+## 7. Roadmap
+- [x] **Leaderboard & Rewards**: Ranking customers and AI-powered ID verification.
+- [ ] **Zalo Integration**: Real-time notifications via Zalo.
 - [ ] **Advanced Maps**: Mapbox integration for station discovery.
-- [ ] **Reporting**: Exporting session data to Excel/CSV for business analysis.
+- [ ] **Reporting**: Exporting session data to Excel/CSV.

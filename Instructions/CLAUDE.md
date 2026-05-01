@@ -60,6 +60,15 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Feature Documentation
+
+**All new feature designs must be documented before implementation.**
+
+- Create a new markdown file in the `features/` directory for each significant feature.
+- Use a descriptive name (e.g., `features/top-10-monthly-rewards.md`).
+- Document the objective, user flow (with Mermaid diagrams), technical implementation details, and security considerations.
+- Reference these documents during development to ensure consistency.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

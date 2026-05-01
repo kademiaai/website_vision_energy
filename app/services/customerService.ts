@@ -1,4 +1,4 @@
-// @/services/customerService.ts
+// @/app/services/customerService.ts
 import { supabase } from "@/lib/supabase";
 
 export interface DateFilter {
@@ -68,8 +68,9 @@ export const customerService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    
-    return (data || []).map(customer => ({
+
+    const rows = (data || []) as any[];
+    return rows.map((customer) => ({
       ...customer,
       total_sessions: customer.total_points || 0,
       last_session: null // Có thể bỏ qua vì không có trong customers table
@@ -236,19 +237,20 @@ export const customerService = {
 
     if (sessionError) throw sessionError;
 
-    const totalSessions = sessions?.length || 0;
-    const uniqueCustomers = new Set(sessions?.map(s => s.license_plate)).size;
+    const sessionsArr = (sessions || []) as any[];
+    const totalSessions = sessionsArr.length || 0;
+    const uniqueCustomers = new Set(sessionsArr.map((s) => s.license_plate)).size;
 
     // Lấy số lượt hôm nay
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todaySessions = sessions?.filter(s => 
+    const todaySessions = sessionsArr.filter((s) => 
       new Date(s.start_time) >= today
     ).length || 0;
 
     // Lấy số lượt trong tháng này
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthSessions = sessions?.filter(s => 
+    const monthSessions = sessionsArr.filter((s) => 
       new Date(s.start_time) >= firstDayOfMonth
     ).length || 0;
 

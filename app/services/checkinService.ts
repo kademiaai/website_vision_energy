@@ -1,14 +1,22 @@
-// @/services/checkinService.ts
+// @/app/services/checkinService.ts
 import { supabase } from "@/lib/supabase";
+import { rewardService } from "./rewardService";
+import { customerService } from "./customerService";
+import { Reward } from "@/lib/types/reward";
 
-const CHECKIN_INTERVAL = 30; // phút (bạn có thể đổi thành 120 nếu muốn chặn 2 tiếng)
+const CHECKIN_INTERVAL = 45; // phút (bạn có thể đổi thành 120 nếu muốn chặn 2 tiếng)
 
 export interface CheckInResult {
   isNewCustomer: boolean;
   customerInfo: any;
   monthlyCount: number;
   totalCount: number;
+  rank: number;
   message: string;
+  pendingReward?: {
+    reward: Reward;
+    type: "selection" | "completion";
+  } | null;
 }
 
 /**
@@ -36,22 +44,28 @@ export const processCheckIn = async (
   }
 
   // --- BƯỚC 1: KIỂM TRA COOLDOWN (Dùng biển số đã làm sạch) ---
-  const { data: lastSession } = await supabase
-    .from("charging_sessions")
-    .select("start_time")
-    .eq("license_plate", cleanPlate)
-    .order("start_time", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Flexible match for test plates (99H99999 or 90H9999)
+  if (cleanPlate.startsWith("99H99999") || cleanPlate.startsWith("90H9999")) {
+    console.info("⚡ [CheckIn] Cooldown bypassed for test plate:", cleanPlate);
+  } else {
+    const { data: lastSession } = await supabase
+      .from("charging_sessions")
+      .select("start_time")
+      .eq("license_plate", cleanPlate)
+      .order("start_time", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (lastSession) {
-    const lastTime = new Date(lastSession.start_time).getTime();
-    const now = new Date().getTime();
-    const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
+    if (lastSession) {
+      const lastTime = new Date(lastSession.start_time).getTime();
+      const now = new Date().getTime();
+      const diffMinutes = Math.floor((now - lastTime) / (1000 * 60));
 
-    if (diffMinutes < CHECKIN_INTERVAL) {
-      // Throw error với format đặc biệt để component có thể bắt và hiển thị cooldown
-      throw new Error(`COOLDOWN:${CHECKIN_INTERVAL - diffMinutes}`);
+      console.log(`[CheckIn] ${cleanPlate} last check-in: ${diffMinutes} mins ago`);
+
+      if (diffMinutes < CHECKIN_INTERVAL) {
+        throw new Error(`COOLDOWN:${CHECKIN_INTERVAL - diffMinutes}`);
+      }
     }
   }
 
@@ -80,7 +94,7 @@ export const processCheckIn = async (
       total_points: newTotalPoints,
       // Giữ lại tên/sđt cũ từ Excel nếu lần này khách không nhập thông tin mới
       full_name: name?.trim() || existingCustomer?.full_name || "Khách hàng mới",
-      phone_number: phone?.trim() || existingCustomer?.phone_number || null,
+      phone_number: phone?.replace(/\s/g, "") || existingCustomer?.phone_number || null,
     },
     { onConflict: "license_plate" }
   );
@@ -122,14 +136,27 @@ export const processCheckIn = async (
     console.error("Lỗi đếm lượt tháng:", countError);
   }
 
+  // --- BƯỚC 7: KIỂM TRA PHẦN THƯỞNG CHỜ THÔNG BÁO ---
+  const pendingReward = await rewardService.getPendingNotification(cleanPlate);
+
+  // --- BƯỚC 8: TÍNH THỨ HẠNG TRONG THÁNG ---
+  const rankings = await customerService.getCustomerRankings({
+    type: 'month',
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear()
+  });
+  const currentRank = rankings.find(r => r.license_plate === cleanPlate)?.rank || 0;
+
   return {
     isNewCustomer: !existingCustomer,
     customerInfo: existingCustomer,
     monthlyCount: monthlyCount || 1,
     totalCount: newTotalPoints,
+    rank: currentRank,
     message: !existingCustomer
       ? "Đăng ký khách hàng mới thành công!"
       : "Check-in thành công!",
+    pendingReward,
   };
 };
 
