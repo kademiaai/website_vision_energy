@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Trophy, Crown, Medal, ChevronDown, RefreshCw, Gift,
   Link2, CheckCircle, Clock, XCircle, Eye, Award,
-  Copy, Check
+  Copy, Check, Trash
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import SettingsPopover from "@/components/ui/SettingsPopover";
 import { rewardService } from "@/app/services/rewardService";
 import { formatVietnamTime, getCurrentVietnamPeriod } from "@/lib/timezone";
 import type { LeaderboardEntry, RewardWithCustomer, Reward, RewardHistoryEntry } from "@/lib/types/reward";
@@ -27,6 +29,37 @@ export default function LeaderboardPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyData, setHistoryData] = useState<RewardHistoryEntry[]>([]);
   const [historyPlate, setHistoryPlate] = useState<string | null>(null);
+  // Column visibility toggles
+  // Hide these two columns by default; admin can toggle them on.
+  const [showCustomerColumn, setShowCustomerColumn] = useState(false);
+  const [showIdNameColumn, setShowIdNameColumn] = useState(false);
+  // Delete confirmation modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; plate: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+  // Persist toggles to localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('admin.showCustomerColumn');
+      if (stored !== null) setShowCustomerColumn(stored === '1');
+      const stored2 = localStorage.getItem('admin.showIdNameColumn');
+      if (stored2 !== null) setShowIdNameColumn(stored2 === '1');
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('admin.showCustomerColumn', showCustomerColumn ? '1' : '0');
+      localStorage.setItem('admin.showIdNameColumn', showIdNameColumn ? '1' : '0');
+    } catch (e) {
+      // ignore
+    }
+  }, [showCustomerColumn, showIdNameColumn]);
+
+  // Compact settings menu state moved to `SettingsPopover` component
 
   // Selection for reward generation
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -78,9 +111,51 @@ export default function LeaderboardPage() {
     }
   }, [activeTab, month, year]);
 
+  // Compute a conservative column count for empty/loading row colspan
+  const computeColSpan = () => {
+    let cols = 0;
+    if (activeTab === 'monthly') {
+      cols = 0;
+      // select checkbox
+      cols += 1;
+      // rank, plate
+      cols += 2;
+      // customer (toggleable)
+      cols += showCustomerColumn ? 1 : 0;
+      // sessions, rewards
+      cols += 2;
+      // status
+      cols += 1;
+    } else if (activeTab === 'alltime') {
+      // rank, plate, customer?, sessions, rewards
+      cols = 2 + (showCustomerColumn ? 1 : 0) + 2;
+    } else {
+      // history table columns (more columns present)
+      cols = 9; // fallback for history view
+      if (!showCustomerColumn) cols -= 1;
+      if (!showIdNameColumn) cols -= 1;
+    }
+    return Math.max(cols, 5);
+  };
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Get current admin email for audit logging
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await import('@/lib/supabase').then(m => m.supabase.auth.getUser());
+        if (!mounted) return;
+        setAdminEmail(data.user?.email || null);
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const toggleSelect = (plate: string) => {
     setSelected((prev) => {
@@ -196,6 +271,7 @@ export default function LeaderboardPage() {
                 className={`absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground ${loading ? "animate-spin" : ""}`} 
               />
             </div>
+            {/* (SettingsPopover moved to the right next to refresh button) */}
 
             {/* Month/Year Filter */}
             {activeTab !== "alltime" && (
@@ -236,6 +312,32 @@ export default function LeaderboardPage() {
             >
               <RefreshCw size={18} />
             </button>
+            <div className="ml-3">
+              <SettingsPopover count={(showCustomerColumn ? 1 : 0) + (showIdNameColumn ? 1 : 0)}>
+                <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="toggle-customer-compact"
+                      checked={showCustomerColumn}
+                      onCheckedChange={(v) => setShowCustomerColumn(Boolean(v))}
+                      className="h-4 w-8"
+                    />
+                    <div className="text-sm">KHÁCH HÀNG</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="toggle-idname-compact"
+                      checked={showIdNameColumn}
+                      onCheckedChange={(v) => setShowIdNameColumn(Boolean(v))}
+                      className="h-4 w-8"
+                    />
+                    <div className="text-sm">TÊN CCCD</div>
+                  </div>
+                </div>
+              </SettingsPopover>
+            </div>
           </div>
         </div>
 
@@ -297,7 +399,7 @@ export default function LeaderboardPage() {
                   )}
                   <th className="px-4 py-3 w-16">Hạng</th>
                   <th className="px-4 py-3">Biển số</th>
-                  <th className="px-4 py-3">Khách hàng</th>
+                  {showCustomerColumn && <th className="px-4 py-3">Khách hàng</th>}
                   <th className="px-4 py-3 text-center">Lượt sạc</th>
                   <th className="px-4 py-3 text-center hidden md:table-cell">Lần thưởng</th>
                   {activeTab === "monthly" && <th className="px-4 py-3 text-center hidden sm:table-cell">Trạng thái</th>}
@@ -323,10 +425,12 @@ export default function LeaderboardPage() {
                     <td className="px-4 py-3">
                       <span className="font-mono font-bold text-primary text-sm">{entry.license_plate}</span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-foreground">{entry.full_name || "Khách vãng lai"}</div>
-                      <div className="text-xs text-muted-foreground">{entry.phone_number || "---"}</div>
-                    </td>
+                    {showCustomerColumn && (
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-foreground">{entry.full_name || "Khách vãng lai"}</div>
+                        <div className="text-xs text-muted-foreground">{entry.phone_number || "---"}</div>
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-center">
                       <span className="text-sm font-bold text-foreground">{entry.total_sessions}</span>
                     </td>
@@ -350,7 +454,7 @@ export default function LeaderboardPage() {
 
                 {filteredLeaderboard.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={computeColSpan()} className="px-4 py-12 text-center text-muted-foreground">
                       <Trophy className="w-12 h-12 mx-auto mb-2 text-border" />
                       <p>Không tìm thấy kết quả</p>
                     </td>
@@ -359,7 +463,7 @@ export default function LeaderboardPage() {
 
                 {loading && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center">
+                    <td colSpan={computeColSpan()} className="px-4 py-12 text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
                     </td>
                   </tr>
@@ -378,8 +482,8 @@ export default function LeaderboardPage() {
               <thead>
                 <tr>
                   <th className="px-2 py-3 text-xs">Biển số</th>
-                  <th className="px-2 py-3 text-xs">Khách hàng</th>
-                  <th className="px-2 py-3 text-xs hidden lg:table-cell">TÊN CCCD</th>
+                  {showCustomerColumn && <th className="px-2 py-3 text-xs">Khách hàng</th>}
+                  {showIdNameColumn && <th className="px-2 py-3 text-xs hidden lg:table-cell">TÊN CCCD</th>}
                   <th className="px-2 py-3 text-center text-xs hidden md:table-cell">Lượt</th>
                   <th className="px-2 py-3 text-center text-xs">Trạng thái</th>
                   <th className="px-2 py-3 text-xs hidden sm:table-cell">Thưởng</th>
@@ -394,18 +498,22 @@ export default function LeaderboardPage() {
                     <td className="px-2 py-3">
                       <span className="font-mono font-bold text-primary text-[11px]">{reward.license_plate}</span>
                     </td>
-                    <td className="px-2 py-3">
-                      <div className="text-xs font-semibold text-foreground whitespace-nowrap">{reward.customer_name || "—"}</div>
-                      <div className="text-[10px] text-muted-foreground">{reward.customer_phone || "—"}</div>
-                    </td>
-                    <td className="px-2 py-3 hidden lg:table-cell">
-                      <div className="text-[10px] font-bold text-muted-foreground uppercase leading-tight">
-                        {reward.id_full_name || "—"}
-                      </div>
-                      <div className="text-[9px] text-muted-foreground font-mono">
-                        {reward.id_number || ""}
-                      </div>
-                    </td>
+                    {showCustomerColumn && (
+                      <td className="px-2 py-3">
+                        <div className="text-xs font-semibold text-foreground whitespace-nowrap">{reward.customer_name || "—"}</div>
+                        <div className="text-[10px] text-muted-foreground">{reward.customer_phone || "—"}</div>
+                      </td>
+                    )}
+                    {showIdNameColumn && (
+                      <td className="px-2 py-3 hidden lg:table-cell">
+                        <div className="text-[10px] font-bold text-muted-foreground uppercase leading-tight">
+                          {reward.id_full_name || "—"}
+                        </div>
+                        <div className="text-[9px] text-muted-foreground font-mono">
+                          {reward.id_number || ""}
+                        </div>
+                      </td>
+                    )}
                     <td className="px-2 py-3 text-center text-xs font-bold hidden md:table-cell">{reward.checkin_count}</td>
                     <td className="px-2 py-3 text-center">{getStatusBadge(reward.status)}</td>
                     <td className="px-2 py-3 text-[10px] text-muted-foreground hidden sm:table-cell leading-tight">
@@ -475,7 +583,7 @@ export default function LeaderboardPage() {
                             setHistoryOpen(true);
                             try {
                               const data = await rewardService.getRewardHistory(reward.license_plate);
-                              setHistoryData(data as Reward[]);
+                              setHistoryData(data as RewardHistoryEntry[]);
                             } catch (err) {
                               console.error('Lỗi lấy lịch sử thưởng (admin):', err);
                               setHistoryData([]);
@@ -487,6 +595,19 @@ export default function LeaderboardPage() {
                           title="Xem lịch sử thưởng"
                         >
                           <Link2 size={12} className="text-muted-foreground" />
+                        </button>
+
+                        {/* Delete wrong reward (admin) */}
+                        <button
+                          onClick={async () => {
+                            // Open confirmation modal
+                            setDeleteTarget({ id: reward.id, plate: reward.license_plate });
+                            setDeleteModalOpen(true);
+                          }}
+                          className="p-1 rounded hover:bg-red-50 transition-colors"
+                          title="Xóa reward"
+                        >
+                          <Trash size={12} className="text-red-500" />
                         </button>
 
                         {reward.id_card_photo_url && (
@@ -581,6 +702,48 @@ export default function LeaderboardPage() {
                 <p className="text-sm">Không có lịch sử thưởng.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteModalOpen && deleteTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Xác nhận xóa</h3>
+              <button onClick={() => { setDeleteModalOpen(false); setDeleteTarget(null); }} className="p-1 rounded hover:bg-muted"><XCircle size={16} /></button>
+            </div>
+            <p className="mb-4">Bạn có chắc chắn muốn xóa phần thưởng của biển số <strong>{deleteTarget.plate}</strong>? Hành động này không thể hoàn tác.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => { setDeleteModalOpen(false); setDeleteTarget(null); }} className="px-4 py-2 rounded-lg border border-border">Hủy</button>
+              <button
+                onClick={async () => {
+                  if (!deleteTarget) return;
+                  setDeleting(true);
+                  try {
+                    const res = await rewardService.deleteReward(deleteTarget.id, adminEmail || undefined);
+                    if (!res.success) {
+                      alert(res.message || 'Xóa thất bại');
+                      setDeleting(false);
+                      return;
+                    }
+                    setDeleteModalOpen(false);
+                    setDeleteTarget(null);
+                    await loadData();
+                  } catch (err) {
+                    console.error('Lỗi xóa reward:', err);
+                    alert('Lỗi khi xóa reward.');
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white"
+                disabled={deleting}
+              >
+                {deleting ? 'Đang xóa...' : 'Xóa'}
+              </button>
+            </div>
           </div>
         </div>
       )}

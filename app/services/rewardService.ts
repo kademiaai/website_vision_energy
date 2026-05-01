@@ -631,4 +631,33 @@ export const rewardService = {
 
     return data.signedUrl;
   },
+
+  /**
+   * Delete a reward record (admin).
+   */
+  async deleteReward(rewardId: string, actor?: string): Promise<{ success: boolean; message: string }> {
+    // Perform deletion
+    const { error } = await supabase.from('rewards').delete().eq('id', rewardId);
+    if (error) {
+      console.error('Lỗi xóa reward:', error);
+      return { success: false, message: 'Xóa thất bại. Vui lòng thử lại.' };
+    }
+
+    // Best-effort: insert an audit log for admin actions. This is non-blocking.
+    try {
+      await supabase.from('admin_audit_logs').insert({
+        action: 'delete_reward',
+        target_table: 'rewards',
+        target_id: rewardId,
+        actor: actor || null,
+        details: JSON.stringify({}),
+        created_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      // If the audit table doesn't exist or insert fails, log and continue.
+      console.warn('Audit log insert failed (non-fatal):', e);
+    }
+
+    return { success: true, message: 'Đã xóa reward.' };
+  },
 };
