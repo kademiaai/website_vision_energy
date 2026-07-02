@@ -33,6 +33,7 @@ export default function LeaderboardPage() {
   // Column visibility toggles
   // Hide these two columns by default; admin can toggle them on.
   const [showCustomerColumn, setShowCustomerColumn] = useState(false);
+  const [showCustomerPhone, setShowCustomerPhone] = useState(false);
   const [showIdNameColumn, setShowIdNameColumn] = useState(false);
   const [showBankNameColumn, setShowBankNameColumn] = useState(false);
   const [showBankAccountColumn, setShowBankAccountColumn] = useState(false);
@@ -53,6 +54,8 @@ export default function LeaderboardPage() {
       if (stored3 !== null) setShowBankNameColumn(stored3 === '1');
       const stored4 = localStorage.getItem('admin.showBankAccountColumn');
       if (stored4 !== null) setShowBankAccountColumn(stored4 === '1');
+      const stored5 = localStorage.getItem('admin.showCustomerPhone');
+      if (stored5 !== null) setShowCustomerPhone(stored5 === '1');
     } catch (e) {
       // ignore
     }
@@ -61,13 +64,14 @@ export default function LeaderboardPage() {
   useEffect(() => {
     try {
       localStorage.setItem('admin.showCustomerColumn', showCustomerColumn ? '1' : '0');
+      localStorage.setItem('admin.showCustomerPhone', showCustomerPhone ? '1' : '0');
       localStorage.setItem('admin.showIdNameColumn', showIdNameColumn ? '1' : '0');
       localStorage.setItem('admin.showBankNameColumn', showBankNameColumn ? '1' : '0');
       localStorage.setItem('admin.showBankAccountColumn', showBankAccountColumn ? '1' : '0');
     } catch (e) {
       // ignore
     }
-  }, [showCustomerColumn, showIdNameColumn, showBankNameColumn, showBankAccountColumn]);
+  }, [showCustomerColumn, showCustomerPhone, showIdNameColumn, showBankNameColumn, showBankAccountColumn]);
 
   // Compact settings menu state moved to `SettingsPopover` component
 
@@ -426,7 +430,7 @@ export default function LeaderboardPage() {
               <span className="hidden sm:inline">Xuất Excel</span>
             </button>
             <div className="ml-3">
-              <SettingsPopover count={(showCustomerColumn ? 1 : 0) + (showIdNameColumn ? 1 : 0) + (showBankNameColumn ? 1 : 0) + (showBankAccountColumn ? 1 : 0)}>
+              <SettingsPopover count={(showCustomerColumn ? 1 : 0) + (showCustomerPhone ? 1 : 0) + (showIdNameColumn ? 1 : 0) + (showBankNameColumn ? 1 : 0) + (showBankAccountColumn ? 1 : 0)}>
                 <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
                   <div className="flex items-center gap-2">
                     <Switch
@@ -436,6 +440,17 @@ export default function LeaderboardPage() {
                       className="h-4 w-8"
                     />
                     <div className="text-sm">KHÁCH HÀNG</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="toggle-customer-phone"
+                      checked={showCustomerPhone}
+                      onCheckedChange={(v) => setShowCustomerPhone(Boolean(v))}
+                      className="h-4 w-8"
+                    />
+                    <div className="text-sm">SỐ ĐT</div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
@@ -563,7 +578,9 @@ export default function LeaderboardPage() {
                     {showCustomerColumn && (
                       <td className="px-4 py-3">
                         <div className="text-sm font-medium text-foreground">{entry.full_name || "Khách vãng lai"}</div>
-                        <div className="text-xs text-muted-foreground">{entry.phone_number || "---"}</div>
+                        {showCustomerPhone && (
+                          <div className="text-xs text-muted-foreground">{entry.phone_number || "---"}</div>
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-3 text-center">
@@ -638,7 +655,9 @@ export default function LeaderboardPage() {
                     {showCustomerColumn && (
                       <td className="px-2 py-3">
                         <div className="text-xs font-semibold text-foreground whitespace-nowrap">{reward.customer_name || "—"}</div>
-                        <div className="text-[10px] text-muted-foreground">{reward.customer_phone || "—"}</div>
+                        {showCustomerPhone && (
+                          <div className="text-[10px] text-muted-foreground">{reward.customer_phone || "—"}</div>
+                        )}
                       </td>
                     )}
                     {showIdNameColumn && (
