@@ -10,6 +10,8 @@ export interface Reward {
   id_card_photo_url: string | null;
   id_full_name: string | null;
   id_number: string | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
   rewarded_at: string | null;
   admin_notes: string | null;
   is_ocr_verified: boolean;
@@ -31,6 +33,8 @@ export interface RewardClaimInput {
   id_number: string;
   id_card_photo_url: string;
   is_ocr_verified: boolean;
+  bank_name: string;
+  bank_account_number: string;
 }
 
 /**

@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS public.rewards (
   id_card_photo_url TEXT,
   id_full_name TEXT,
   id_number TEXT,
+  bank_name TEXT,
+  bank_account_number TEXT,
   rewarded_at TIMESTAMPTZ,
   admin_notes TEXT,
   is_ocr_verified BOOLEAN NOT NULL DEFAULT false,

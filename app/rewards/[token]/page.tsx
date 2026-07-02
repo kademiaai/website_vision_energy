@@ -10,6 +10,24 @@ import type { Reward } from "@/lib/types/reward";
 
 type Step = "verify" | "capture" | "review" | "done" | "error" | "already-submitted";
 
+const vietnamBanks = [
+  "Vietcombank",
+  "Techcombank",
+  "BIDV",
+  "Agribank",
+  "VietinBank",
+  "Sacombank",
+  "MB Bank",
+  "VPBank",
+  "ACB",
+  "SHB",
+  "HDBank",
+  "TPBank",
+  "SeABank",
+  "OceanBank",
+  "NamABank",
+];
+
 export default function RewardPortalPage() {
   const params = useParams();
   const token = params.token as string;
@@ -25,6 +43,10 @@ export default function RewardPortalPage() {
   const [plate, setPlate] = useState("");
   const [phone, setPhone] = useState("");
   const [verifyError, setVerifyError] = useState("");
+
+  // Bank payout details
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
 
   // CCCD data
   const [idName, setIdName] = useState("");
@@ -77,6 +99,10 @@ export default function RewardPortalPage() {
       val = `${val.slice(0, 4)} ${val.slice(4, 7)}`;
     }
     setPhone(val);
+  };
+
+  const handleBankAccountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBankAccountNumber(e.target.value.replace(/\D/g, ""));
   };
 
   const handleVerify = async () => {
@@ -153,6 +179,14 @@ export default function RewardPortalPage() {
       alert("Vui lòng nhập họ tên và số CCCD.");
       return;
     }
+    if (!bankName.trim()) {
+      alert("Vui lòng chọn ngân hàng nhận thưởng.");
+      return;
+    }
+    if (!bankAccountNumber.trim()) {
+      alert("Vui lòng nhập số tài khoản ngân hàng.");
+      return;
+    }
     setStep("review");
   };
 
@@ -160,6 +194,10 @@ export default function RewardPortalPage() {
   const handleSubmit = async () => {
     if (!consent) {
       alert("Vui lòng đồng ý với điều khoản bảo mật.");
+      return;
+    }
+    if (!bankName.trim() || !bankAccountNumber.trim()) {
+      alert("Vui lòng chọn ngân hàng và nhập số tài khoản.");
       return;
     }
     if (submitting) return;
@@ -181,6 +219,8 @@ export default function RewardPortalPage() {
         id_number: idNumber,
         id_card_photo_url: storagePath,
         is_ocr_verified: isOcrVerified,
+        bank_name: bankName.trim(),
+        bank_account_number: bankAccountNumber.trim(),
       });
 
       if (result.success) {
@@ -398,6 +438,37 @@ export default function RewardPortalPage() {
                   className="admin-input font-mono tracking-wider"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Ngân hàng nhận thưởng
+                </label>
+                <select
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className="admin-input"
+                >
+                  <option value="">Chọn ngân hàng</option>
+                  {vietnamBanks.map((bank) => (
+                    <option key={bank} value={bank}>
+                      {bank}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Số tài khoản
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={bankAccountNumber}
+                  onChange={handleBankAccountChange}
+                  placeholder="VD: 1234567890"
+                  maxLength={20}
+                  className="admin-input"
+                />
+              </div>
             </div>
 
             <button
@@ -432,6 +503,14 @@ export default function RewardPortalPage() {
               <div className="flex justify-between p-3 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">Số CCCD</span>
                 <span className="text-sm font-mono font-medium text-foreground">{idNumber}</span>
+              </div>
+              <div className="flex justify-between p-3 bg-muted rounded-lg">
+                <span className="text-sm text-muted-foreground">Ngân hàng</span>
+                <span className="text-sm font-medium text-foreground">{bankName || "—"}</span>
+              </div>
+              <div className="flex justify-between p-3 bg-muted rounded-lg">
+                <span className="text-sm text-muted-foreground">Số tài khoản</span>
+                <span className="text-sm font-medium text-foreground">{bankAccountNumber || "—"}</span>
               </div>
               <div className="flex justify-between p-3 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">OCR</span>
@@ -529,6 +608,18 @@ export default function RewardPortalPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Số CCCD đã gửi:</span>
                     <span className="font-mono font-medium text-foreground">{reward.id_number}</span>
+                  </div>
+                )}
+                {reward.bank_name && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ngân hàng đã gửi:</span>
+                    <span className="font-medium text-foreground">{reward.bank_name}</span>
+                  </div>
+                )}
+                {reward.bank_account_number && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Số tài khoản đã gửi:</span>
+                    <span className="font-medium text-foreground">{reward.bank_account_number}</span>
                   </div>
                 )}
               </div>

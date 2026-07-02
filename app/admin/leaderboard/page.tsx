@@ -3,8 +3,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Trophy, Crown, Medal, ChevronDown, RefreshCw, Gift,
   Link2, CheckCircle, Clock, XCircle, Eye, Award,
-  Copy, Check, Trash
+  Copy, Check, Trash, Download
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Switch } from "@/components/ui/switch";
 import SettingsPopover from "@/components/ui/SettingsPopover";
 import { rewardService } from "@/app/services/rewardService";
@@ -33,11 +34,14 @@ export default function LeaderboardPage() {
   // Hide these two columns by default; admin can toggle them on.
   const [showCustomerColumn, setShowCustomerColumn] = useState(false);
   const [showIdNameColumn, setShowIdNameColumn] = useState(false);
+  const [showBankNameColumn, setShowBankNameColumn] = useState(false);
+  const [showBankAccountColumn, setShowBankAccountColumn] = useState(false);
   // Delete confirmation modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; plate: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
+
   // Persist toggles to localStorage
   useEffect(() => {
     try {
@@ -45,6 +49,10 @@ export default function LeaderboardPage() {
       if (stored !== null) setShowCustomerColumn(stored === '1');
       const stored2 = localStorage.getItem('admin.showIdNameColumn');
       if (stored2 !== null) setShowIdNameColumn(stored2 === '1');
+      const stored3 = localStorage.getItem('admin.showBankNameColumn');
+      if (stored3 !== null) setShowBankNameColumn(stored3 === '1');
+      const stored4 = localStorage.getItem('admin.showBankAccountColumn');
+      if (stored4 !== null) setShowBankAccountColumn(stored4 === '1');
     } catch (e) {
       // ignore
     }
@@ -54,10 +62,12 @@ export default function LeaderboardPage() {
     try {
       localStorage.setItem('admin.showCustomerColumn', showCustomerColumn ? '1' : '0');
       localStorage.setItem('admin.showIdNameColumn', showIdNameColumn ? '1' : '0');
+      localStorage.setItem('admin.showBankNameColumn', showBankNameColumn ? '1' : '0');
+      localStorage.setItem('admin.showBankAccountColumn', showBankAccountColumn ? '1' : '0');
     } catch (e) {
       // ignore
     }
-  }, [showCustomerColumn, showIdNameColumn]);
+  }, [showCustomerColumn, showIdNameColumn, showBankNameColumn, showBankAccountColumn]);
 
   // Compact settings menu state moved to `SettingsPopover` component
 
@@ -67,10 +77,11 @@ export default function LeaderboardPage() {
   // Copied token feedback
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
-  // Search filter
+  // Search/filter state
   const [searchTerm, setSearchTerm] = useState("");
+  const [topLimit, setTopLimit] = useState<number | "all">("all");
 
-  const filteredLeaderboard = leaderboard.filter((e) => {
+  const searchedLeaderboard = leaderboard.filter((e) => {
     const term = searchTerm.toLowerCase().trim();
     if (!term) return true;
     return (
@@ -79,6 +90,10 @@ export default function LeaderboardPage() {
       (e.full_name || "").toLowerCase().includes(term)
     );
   });
+
+  const filteredLeaderboard = topLimit === "all"
+    ? searchedLeaderboard
+    : searchedLeaderboard.slice(0, topLimit);
 
   const filteredRewards = rewards.filter((r) => {
     const term = searchTerm.toLowerCase().trim();
@@ -134,6 +149,8 @@ export default function LeaderboardPage() {
       cols = 9; // fallback for history view
       if (!showCustomerColumn) cols -= 1;
       if (!showIdNameColumn) cols -= 1;
+      if (!showBankNameColumn) cols -= 1;
+      if (!showBankAccountColumn) cols -= 1;
     }
     return Math.max(cols, 5);
   };
@@ -239,6 +256,77 @@ export default function LeaderboardPage() {
     }
   };
 
+  const getStatusText = (status: string | null) => {
+    switch (status) {
+      case "eligible":
+        return "Chờ gửi";
+      case "processing":
+        return "Đang xử lý";
+      case "completed":
+        return "Đã thưởng";
+      case "rejected":
+        return "Từ chối";
+      default:
+        return "—";
+    }
+  };
+
+  const exportToExcel = () => {
+    const workbook = XLSX.utils.book_new();
+    const topLabel = topLimit === "all" ? "Tat_ca" : `Top_${topLimit}`;
+
+    if (activeTab === "history") {
+      if (filteredRewards.length === 0) {
+        alert("Không có dữ liệu để xuất Excel.");
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(filteredRewards.map((reward) => ({
+        "Biển số": reward.license_plate,
+        "Khách hàng": reward.customer_name || "—",
+        "Số điện thoại": reward.customer_phone || "—",
+        "TÊN CCCD": reward.id_full_name || "—",
+        "Số CCCD": reward.id_number || "—",
+        "Ngân hàng": reward.bank_name || "—",
+        "Số TK": reward.bank_account_number || "—",
+        "Lượt sạc": reward.checkin_count,
+        "Trạng thái": getStatusText(reward.status),
+        "Thưởng lúc": reward.rewarded_at ? formatVietnamTime(reward.rewarded_at) : "—",
+        "Xác nhận lúc": reward.completion_seen_at ? formatVietnamTime(reward.completion_seen_at) : "—",
+        "Lần thưởng": reward.total_rewards_lifetime,
+        "Tháng": reward.month,
+        "Năm": reward.year,
+      })));
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "LichSuThuong");
+      XLSX.writeFile(workbook, `lich_su_thuong_${month}_${year}.xlsx`);
+      return;
+    }
+
+    if (filteredLeaderboard.length === 0) {
+      alert("Không có dữ liệu để xuất Excel.");
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(filteredLeaderboard.map((entry) => ({
+      "Hạng": entry.rank,
+      "Biển số": entry.license_plate,
+      "Khách hàng": entry.full_name || "Khách vãng lai",
+      "Số điện thoại": entry.phone_number || "—",
+      "Lượt sạc": entry.total_sessions,
+      "Lần thưởng": entry.total_rewards_lifetime,
+      "Trạng thái": activeTab === "monthly" ? getStatusText(entry.reward_status) : "—",
+    })));
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, activeTab === "monthly" ? "XepHangThang" : "TatCaThoiGian");
+    XLSX.writeFile(
+      workbook,
+      activeTab === "monthly"
+        ? `xep_hang_thang_${month}_${year}_${topLabel}.xlsx`
+        : `xep_hang_tat_ca_thoi_gian_${topLabel}.xlsx`
+    );
+  };
+
 
 
   return (
@@ -272,6 +360,23 @@ export default function LeaderboardPage() {
               />
             </div>
             {/* (SettingsPopover moved to the right next to refresh button) */}
+
+            {/* Top-N Filter */}
+            {(activeTab === "monthly" || activeTab === "alltime") && (
+              <div className="relative w-full sm:w-28">
+                <select
+                  className="admin-select pl-3 pr-8 py-2 appearance-none w-full"
+                  value={topLimit}
+                  onChange={(e) => setTopLimit(e.target.value === "all" ? "all" : Number(e.target.value))}
+                >
+                  <option value="all">Tất cả</option>
+                  {[5, 10, 20, 50, 100].map((limit) => (
+                    <option key={limit} value={limit}>Top {limit}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+              </div>
+            )}
 
             {/* Month/Year Filter */}
             {activeTab !== "alltime" && (
@@ -312,8 +417,16 @@ export default function LeaderboardPage() {
             >
               <RefreshCw size={18} />
             </button>
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              disabled={loading || (activeTab === "history" ? filteredRewards.length === 0 : filteredLeaderboard.length === 0)}
+            >
+              <Download size={18} />
+              <span className="hidden sm:inline">Xuất Excel</span>
+            </button>
             <div className="ml-3">
-              <SettingsPopover count={(showCustomerColumn ? 1 : 0) + (showIdNameColumn ? 1 : 0)}>
+              <SettingsPopover count={(showCustomerColumn ? 1 : 0) + (showIdNameColumn ? 1 : 0) + (showBankNameColumn ? 1 : 0) + (showBankAccountColumn ? 1 : 0)}>
                 <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
                   <div className="flex items-center gap-2">
                     <Switch
@@ -334,6 +447,28 @@ export default function LeaderboardPage() {
                       className="h-4 w-8"
                     />
                     <div className="text-sm">TÊN CCCD</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="toggle-bank-name"
+                      checked={showBankNameColumn}
+                      onCheckedChange={(v) => setShowBankNameColumn(Boolean(v))}
+                      className="h-4 w-8"
+                    />
+                    <div className="text-sm">NGÂN HÀNG</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="toggle-bank-account"
+                      checked={showBankAccountColumn}
+                      onCheckedChange={(v) => setShowBankAccountColumn(Boolean(v))}
+                      className="h-4 w-8"
+                    />
+                    <div className="text-sm">SỐ TK</div>
                   </div>
                 </div>
               </SettingsPopover>
@@ -484,6 +619,8 @@ export default function LeaderboardPage() {
                   <th className="px-2 py-3 text-xs">Biển số</th>
                   {showCustomerColumn && <th className="px-2 py-3 text-xs">Khách hàng</th>}
                   {showIdNameColumn && <th className="px-2 py-3 text-xs hidden lg:table-cell">TÊN CCCD</th>}
+                  {showBankNameColumn && <th className="px-2 py-3 text-xs hidden lg:table-cell">Ngân hàng</th>}
+                  {showBankAccountColumn && <th className="px-2 py-3 text-xs hidden lg:table-cell">Số TK</th>}
                   <th className="px-2 py-3 text-center text-xs hidden md:table-cell">Lượt</th>
                   <th className="px-2 py-3 text-center text-xs">Trạng thái</th>
                   <th className="px-2 py-3 text-xs hidden sm:table-cell">Thưởng</th>
@@ -511,6 +648,20 @@ export default function LeaderboardPage() {
                         </div>
                         <div className="text-[9px] text-muted-foreground font-mono">
                           {reward.id_number || ""}
+                        </div>
+                      </td>
+                    )}
+                    {showBankNameColumn && (
+                      <td className="px-2 py-3 hidden lg:table-cell">
+                        <div className="text-[10px] font-semibold text-foreground uppercase leading-tight">
+                          {reward.bank_name || "—"}
+                        </div>
+                      </td>
+                    )}
+                    {showBankAccountColumn && (
+                      <td className="px-2 py-3 hidden lg:table-cell">
+                        <div className="text-[10px] text-foreground font-mono leading-tight">
+                          {reward.bank_account_number || "—"}
                         </div>
                       </td>
                     )}
@@ -629,7 +780,7 @@ export default function LeaderboardPage() {
 
                 {filteredRewards.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={computeColSpan()} className="px-4 py-12 text-center text-muted-foreground">
                       <Gift className="w-12 h-12 mx-auto mb-2 text-border" />
                       <p>Không tìm thấy kết quả</p>
                     </td>

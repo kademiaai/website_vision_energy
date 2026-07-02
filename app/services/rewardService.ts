@@ -262,6 +262,8 @@ export const rewardService = {
         id_number: data.id_number.trim(),
         id_card_photo_url: data.id_card_photo_url,
         is_ocr_verified: data.is_ocr_verified,
+        bank_name: data.bank_name.trim(),
+        bank_account_number: data.bank_account_number.trim(),
         status: "processing",
       })
       .eq("token", data.token)
