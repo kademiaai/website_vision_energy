@@ -46,6 +46,39 @@ export function getCurrentVietnamPeriod(): { month: number; year: number } {
 }
 
 /**
+ * Get the current day, month and year in Vietnam timezone.
+ * Used to gate date-based UI (e.g. reminders that only start on a given day).
+ */
+export function getCurrentVietnamDate(): { day: number; month: number; year: number } {
+  const now = new Date();
+  const vietnamNow = new Date(now.getTime() + VIETNAM_OFFSET_HOURS * 60 * 60 * 1000);
+  return {
+    day: vietnamNow.getUTCDate(),
+    month: vietnamNow.getUTCMonth() + 1,
+    year: vietnamNow.getUTCFullYear(),
+  };
+}
+
+/**
+ * Today's date in Vietnam timezone as an ISO date string (YYYY-MM-DD).
+ * Comparable directly against Postgres DATE columns.
+ */
+export function getCurrentVietnamDateISO(): string {
+  const { day, month, year } = getCurrentVietnamDate();
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Last calendar day of a given month, as an ISO date string (YYYY-MM-DD).
+ * Used to cap e-voucher expiry to the end of the month it was assigned for,
+ * regardless of the (much later) expiry printed on the original gift card.
+ */
+export function getLastDayOfMonthISO(month: number, year: number): string {
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+}
+
+/**
  * Format a UTC timestamp string to Vietnam local display.
  * Returns format: "DD/MM/YYYY HH:mm"
  */

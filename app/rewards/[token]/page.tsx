@@ -3,10 +3,12 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   Shield, Camera, CheckCircle, AlertCircle, Loader2,
-  UserCheck, ChevronRight, Zap, Lock, FileText
+  UserCheck, ChevronRight, Zap, Lock, FileText, Gift, ExternalLink
 } from "lucide-react";
 import { rewardService } from "@/app/services/rewardService";
+import { evoucherService } from "@/app/services/evoucherService";
 import type { Reward } from "@/lib/types/reward";
+import type { EVoucher } from "@/lib/types/evoucher";
 
 type Step = "verify" | "capture" | "review" | "done" | "error" | "already-submitted";
 
@@ -38,6 +40,7 @@ export default function RewardPortalPage() {
   const [submitting, setSubmitting] = useState(false);
   const [reward, setReward] = useState<Reward | null>(null);
   const [message, setMessage] = useState("");
+  const [voucher, setVoucher] = useState<EVoucher | null>(null);
 
   // Identity verification
   const [plate, setPlate] = useState("");
@@ -77,6 +80,16 @@ export default function RewardPortalPage() {
       } else {
         setReward(result.reward);
       }
+
+      if (result.reward) {
+        const assignedVoucher = await evoucherService.getAssignedVoucherForPlate(
+          result.reward.license_plate,
+          result.reward.month,
+          result.reward.year
+        );
+        setVoucher(assignedVoucher);
+      }
+
       setLoading(false);
     };
     validate();
@@ -179,14 +192,6 @@ export default function RewardPortalPage() {
       alert("Vui lòng nhập họ tên và số CCCD.");
       return;
     }
-    if (!bankName.trim()) {
-      alert("Vui lòng chọn ngân hàng nhận thưởng.");
-      return;
-    }
-    if (!bankAccountNumber.trim()) {
-      alert("Vui lòng nhập số tài khoản ngân hàng.");
-      return;
-    }
     setStep("review");
   };
 
@@ -194,10 +199,6 @@ export default function RewardPortalPage() {
   const handleSubmit = async () => {
     if (!consent) {
       alert("Vui lòng đồng ý với điều khoản bảo mật.");
-      return;
-    }
-    if (!bankName.trim() || !bankAccountNumber.trim()) {
-      alert("Vui lòng chọn ngân hàng và nhập số tài khoản.");
       return;
     }
     if (submitting) return;
@@ -440,7 +441,7 @@ export default function RewardPortalPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Ngân hàng nhận thưởng
+                  Ngân hàng nhận thưởng <span className="text-muted-foreground font-normal text-xs">(không bắt buộc)</span>
                 </label>
                 <select
                   value={bankName}
@@ -457,7 +458,7 @@ export default function RewardPortalPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Số tài khoản
+                  Số tài khoản <span className="text-muted-foreground font-normal text-xs">(không bắt buộc)</span>
                 </label>
                 <input
                   type="text"
@@ -596,6 +597,32 @@ export default function RewardPortalPage() {
               </h2>
               <p className="text-muted-foreground text-sm mt-2">{message}</p>
             </div>
+
+            {/* E-voucher — only revealed once the admin has approved (status = completed) */}
+            {voucher && reward?.status === "completed" && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3 justify-between text-left">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-emerald-500/15 rounded-full flex items-center justify-center shrink-0">
+                    <Gift size={20} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground">
+                      Bạn có một e-voucher {voucher.denomination.toLocaleString("vi-VN")}đ
+                    </p>
+                    <p className="text-xs text-muted-foreground">Quà tặng từ chương trình xếp hạng tháng {reward?.month}/{reward?.year}</p>
+                  </div>
+                </div>
+                <a
+                  href={`/evouchers/${voucher.token}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg text-sm whitespace-nowrap transition-colors w-full sm:w-auto"
+                >
+                  <ExternalLink size={16} />
+                  Bấm nhận e-voucher tại đây
+                </a>
+              </div>
+            )}
 
             {/* Show existing submission info if available */}
             {reward?.id_full_name && (

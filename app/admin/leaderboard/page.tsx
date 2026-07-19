@@ -3,14 +3,17 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Trophy, Crown, Medal, ChevronDown, RefreshCw, Gift,
   Link2, CheckCircle, Clock, XCircle, Eye, Award,
-  Copy, Check, Trash, Download
+  Copy, Check, Trash, Download, Ticket, Loader2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Switch } from "@/components/ui/switch";
 import SettingsPopover from "@/components/ui/SettingsPopover";
 import { rewardService } from "@/app/services/rewardService";
+import { evoucherService } from "@/app/services/evoucherService";
 import { formatVietnamTime, getCurrentVietnamPeriod } from "@/lib/timezone";
 import type { LeaderboardEntry, RewardWithCustomer, Reward, RewardHistoryEntry } from "@/lib/types/reward";
+import { getVoucherTierForRank } from "@/lib/types/evoucher";
+import type { EVoucher, EVoucherTierRule, VoucherInventorySummary } from "@/lib/types/evoucher";
 
 type TabType = "monthly" | "alltime" | "history";
 
@@ -42,6 +45,16 @@ export default function LeaderboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; plate: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
+
+  // E-voucher assignment state
+  const [assignedVouchers, setAssignedVouchers] = useState<Map<string, EVoucher>>(new Map());
+  const [assigningPlate, setAssigningPlate] = useState<string | null>(null);
+  const [tierRules, setTierRules] = useState<EVoucherTierRule[]>([]);
+  const [voucherInventory, setVoucherInventory] = useState<VoucherInventorySummary[]>([]);
+  const [selectedDenomination, setSelectedDenomination] = useState<Record<string, number>>({});
+  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false);
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [bulkAssignResult, setBulkAssignResult] = useState<string | null>(null);
 
   // Persist toggles to localStorage
   useEffect(() => {
@@ -114,8 +127,17 @@ export default function LeaderboardPage() {
     setLoading(true);
     try {
       if (activeTab === "monthly") {
-        const data = await rewardService.getMonthlyLeaderboard(month, year);
+        await evoucherService.expireOverdueVouchers();
+        const [data, vouchers, rules, inv] = await Promise.all([
+          rewardService.getMonthlyLeaderboard(month, year),
+          evoucherService.getAssignedVouchersForPeriod(month, year),
+          evoucherService.getTierRules(),
+          evoucherService.getInventorySummary(),
+        ]);
         setLeaderboard(data);
+        setAssignedVouchers(vouchers);
+        setTierRules(rules);
+        setVoucherInventory(inv);
       } else if (activeTab === "alltime") {
         const data = await rewardService.getAllTimeLeaderboard();
         setLeaderboard(data);
@@ -144,6 +166,8 @@ export default function LeaderboardPage() {
       // sessions, rewards
       cols += 2;
       // status
+      cols += 1;
+      // e-voucher
       cols += 1;
     } else if (activeTab === 'alltime') {
       // rank, plate, customer?, sessions, rewards
@@ -178,6 +202,10 @@ export default function LeaderboardPage() {
     return () => { mounted = false; };
   }, []);
 
+  // Không còn thưởng tiền qua ngân hàng — chỉ được tạo link nhận thưởng cho
+  // khách hàng đã được gán e-voucher cho kỳ này.
+  const canGenerateReward = (entry: LeaderboardEntry) => !entry.reward_status && assignedVouchers.has(entry.license_plate);
+
   const toggleSelect = (plate: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -187,17 +215,20 @@ export default function LeaderboardPage() {
     });
   };
 
+  const generatableInView = filteredLeaderboard.filter(canGenerateReward);
+
   const selectAll = () => {
-    if (selected.size === filteredLeaderboard.length && filteredLeaderboard.length > 0) {
+    if (selected.size === generatableInView.length && generatableInView.length > 0) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(filteredLeaderboard.filter(e => !e.reward_status).map((e) => e.license_plate)));
+      setSelected(new Set(generatableInView.map((e) => e.license_plate)));
     }
   };
 
   const handleGenerateLinks = async () => {
-    const entries = leaderboard
-      .filter((e) => selected.has(e.license_plate) && !e.reward_status)
+    const selectedEntries = leaderboard.filter((e) => selected.has(e.license_plate));
+    const entries = selectedEntries
+      .filter(canGenerateReward)
       .map((e) => ({
         license_plate: e.license_plate,
         month,
@@ -205,17 +236,111 @@ export default function LeaderboardPage() {
         checkin_count: e.total_sessions,
       }));
 
-    if (entries.length === 0) return;
+    const skipped = selectedEntries.length - entries.length;
+
+    if (entries.length === 0) {
+      alert("Không thể tạo link: các khách hàng đã chọn chưa được gán e-voucher cho kỳ này.");
+      return;
+    }
 
     try {
       const results = await rewardService.generateRewardTokens(entries);
-      alert(`Đã tạo ${results.length} link nhận thưởng!`);
+      alert(
+        `Đã tạo ${results.length} link nhận thưởng!` +
+          (skipped > 0 ? ` (${skipped} khách hàng bị bỏ qua vì chưa được gán e-voucher.)` : "")
+      );
       setSelected(new Set());
       loadData();
     } catch (err) {
       console.error("Lỗi tạo link:", err);
       alert("Có lỗi xảy ra khi tạo link.");
     }
+  };
+
+  const availableDenominations = voucherInventory.filter((i) => i.available > 0).map((i) => i.denomination);
+
+  const denominationForRow = (plate: string, rank: number): number | undefined => {
+    if (selectedDenomination[plate] !== undefined) return selectedDenomination[plate];
+    const tier = getVoucherTierForRank(rank, tierRules);
+    if (tier && availableDenominations.includes(tier.denomination)) return tier.denomination;
+    return availableDenominations[0];
+  };
+
+  const handleAssignVoucher = async (plate: string, rank: number) => {
+    const denomination = denominationForRow(plate, rank);
+    if (!denomination) {
+      alert("Không còn e-voucher nào trong kho.");
+      return;
+    }
+
+    setAssigningPlate(plate);
+    try {
+      const result = await evoucherService.assignVoucher(plate, denomination, month, year, rank, adminEmail || undefined);
+      if (!result.success) {
+        alert(result.message);
+        return;
+      }
+      // Clear the manual pick so a future unassign+reassign for this plate
+      // recomputes the default from the current tier rule / stock, instead
+      // of silently reusing whatever was picked (and may now be stale).
+      setSelectedDenomination((prev) => {
+        const next = { ...prev };
+        delete next[plate];
+        return next;
+      });
+      await loadData();
+    } catch (err) {
+      console.error("Lỗi gán e-voucher:", err);
+      alert("Có lỗi xảy ra khi gán e-voucher.");
+    } finally {
+      setAssigningPlate(null);
+    }
+  };
+
+  const handleUnassignVoucher = async (voucherId: string, plate: string) => {
+    if (!confirm("Hủy gán e-voucher này? Voucher sẽ trở lại kho.")) return;
+    setAssigningPlate(plate);
+    try {
+      const result = await evoucherService.unassignVoucher(voucherId);
+      if (!result.success) {
+        alert(result.message);
+        return;
+      }
+      await loadData();
+    } finally {
+      setAssigningPlate(null);
+    }
+  };
+
+  const bulkAssignCandidates = leaderboard.filter((e) => {
+    const tier = getVoucherTierForRank(e.rank, tierRules);
+    return tier && !assignedVouchers.has(e.license_plate);
+  });
+
+  const handleBulkAssign = async () => {
+    setBulkAssigning(true);
+    setBulkAssignResult(null);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const entry of bulkAssignCandidates) {
+      const tier = getVoucherTierForRank(entry.rank, tierRules);
+      if (!tier) continue;
+      const result = await evoucherService.assignVoucher(
+        entry.license_plate,
+        tier.denomination,
+        month,
+        year,
+        entry.rank,
+        adminEmail || undefined
+      );
+      if (result.success) successCount++;
+      else failCount++;
+    }
+
+    setBulkAssignResult(`Đã gán ${successCount}/${bulkAssignCandidates.length} e-voucher${failCount > 0 ? ` (${failCount} thất bại, có thể do hết hàng)` : ""}.`);
+    setBulkAssigning(false);
+    await loadData();
   };
 
   const handleApprove = async (id: string) => {
@@ -533,6 +658,24 @@ export default function LeaderboardPage() {
             </div>
           )}
 
+          {activeTab === "monthly" && bulkAssignCandidates.length > 0 && (
+            <div className="p-4 bg-amber-500/5 border-b border-border flex items-center justify-between">
+              <span className="text-sm text-foreground">
+                <strong>{bulkAssignCandidates.length}</strong> khách hàng thuộc quy tắc gán e-voucher nhưng chưa được gán
+              </span>
+              <button
+                onClick={() => {
+                  setBulkAssignResult(null);
+                  setBulkAssignModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+              >
+                <Ticket size={16} />
+                Gán E-voucher hàng loạt
+              </button>
+            </div>
+          )}
+
           <div className="admin-table-container border-0">
             <table className="admin-table">
               <thead>
@@ -541,7 +684,7 @@ export default function LeaderboardPage() {
                     <th className="px-4 py-3 w-10">
                       <input
                         type="checkbox"
-                        checked={selected.size === filteredLeaderboard.length && filteredLeaderboard.length > 0}
+                        checked={selected.size === generatableInView.length && generatableInView.length > 0}
                         onChange={selectAll}
                         className="rounded border-border"
                       />
@@ -553,6 +696,7 @@ export default function LeaderboardPage() {
                   <th className="px-4 py-3 text-center">Lượt sạc</th>
                   <th className="px-4 py-3 text-center hidden md:table-cell">Lần thưởng</th>
                   {activeTab === "monthly" && <th className="px-4 py-3 text-center hidden sm:table-cell">Trạng thái</th>}
+                  {activeTab === "monthly" && <th className="px-4 py-3 text-center">E-voucher</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -565,7 +709,14 @@ export default function LeaderboardPage() {
                           checked={selected.has(entry.license_plate)}
                           onChange={() => toggleSelect(entry.license_plate)}
                           className="rounded border-border"
-                          disabled={!!entry.reward_status}
+                          disabled={!canGenerateReward(entry)}
+                          title={
+                            entry.reward_status
+                              ? undefined
+                              : !assignedVouchers.has(entry.license_plate)
+                              ? "Cần gán e-voucher trước khi tạo link nhận thưởng"
+                              : undefined
+                          }
                         />
                       </td>
                     )}
@@ -599,6 +750,66 @@ export default function LeaderboardPage() {
                     {activeTab === "monthly" && (
                       <td className="px-4 py-3 text-center hidden sm:table-cell">
                         {getStatusBadge(entry.reward_status)}
+                      </td>
+                    )}
+                    {activeTab === "monthly" && (
+                      <td className="px-4 py-3 text-center">
+                        {(() => {
+                          const voucher = assignedVouchers.get(entry.license_plate);
+                          if (voucher) {
+                            return (
+                              <div className="flex items-center justify-center gap-1">
+                                <span className={`badge ${voucher.status === "opened" ? "bg-green-500/10 text-green-600" : "bg-blue-500/10 text-blue-500"}`}>
+                                  <Ticket size={12} className="mr-1" />
+                                  {voucher.denomination.toLocaleString("vi-VN")}đ · {voucher.status === "opened" ? "Đã mở quà" : "Đã gán"}
+                                </span>
+                                {voucher.status === "assigned" && (
+                                  <button
+                                    onClick={() => handleUnassignVoucher(voucher.id, entry.license_plate)}
+                                    disabled={assigningPlate === entry.license_plate}
+                                    className="p-1 rounded hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                                    title="Hủy gán"
+                                  >
+                                    <XCircle size={12} className="text-red-500" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (availableDenominations.length === 0) {
+                            return <span className="text-muted-foreground text-xs">Hết hàng</span>;
+                          }
+
+                          const selected = denominationForRow(entry.license_plate, entry.rank);
+                          return (
+                            <div className="flex items-center justify-center gap-1">
+                              <select
+                                value={selected}
+                                onChange={(e) =>
+                                  setSelectedDenomination((prev) => ({ ...prev, [entry.license_plate]: Number(e.target.value) }))
+                                }
+                                className="admin-select py-1 px-1.5 text-xs w-24"
+                              >
+                                {availableDenominations.map((d) => (
+                                  <option key={d} value={d}>{d.toLocaleString("vi-VN")}đ</option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => handleAssignVoucher(entry.license_plate, entry.rank)}
+                                disabled={assigningPlate === entry.license_plate}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors text-xs font-medium disabled:opacity-50"
+                              >
+                                {assigningPlate === entry.license_plate ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <Ticket size={12} />
+                                )}
+                                Gán
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </td>
                     )}
                   </tr>
@@ -863,6 +1074,9 @@ export default function LeaderboardPage() {
                       {r.status === 'eligible' && (
                         <a href={`/rewards/${r.token}`} className="block text-[10px] text-primary font-black mt-1 underline">NHẬN NGAY</a>
                       )}
+                      {r.evoucher_opened_at && (
+                        <span className="block text-[10px] font-bold text-emerald-600 mt-1">🎁 Đã mở quà</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -913,6 +1127,71 @@ export default function LeaderboardPage() {
               >
                 {deleting ? 'Đang xóa...' : 'Xóa'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk e-voucher assignment modal */}
+      {bulkAssignModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Ticket size={18} className="text-amber-600" />
+                Gán E-voucher hàng loạt
+              </h3>
+              <button
+                onClick={() => {
+                  if (bulkAssigning) return;
+                  setBulkAssignModalOpen(false);
+                }}
+                className="p-1 rounded hover:bg-muted"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+
+            <p className="mb-3 text-sm text-muted-foreground">
+              Sẽ gán e-voucher theo quy tắc hạng hiện tại cho <strong>{bulkAssignCandidates.length}</strong> khách hàng chưa có voucher:
+            </p>
+            <div className="max-h-48 overflow-y-auto space-y-1 mb-4">
+              {bulkAssignCandidates.map((c) => {
+                const tier = getVoucherTierForRank(c.rank, tierRules);
+                return (
+                  <div key={c.license_plate} className="flex justify-between text-xs bg-muted/30 rounded px-2 py-1.5">
+                    <span className="font-mono font-bold text-primary">#{c.rank} · {c.license_plate}</span>
+                    <span className="text-muted-foreground">{tier?.denomination.toLocaleString("vi-VN")}đ</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {bulkAssignResult && (
+              <div className="flex items-center gap-2 text-green-600 bg-green-500/10 p-3 rounded-lg text-sm mb-4">
+                <CheckCircle size={16} />
+                {bulkAssignResult}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setBulkAssignModalOpen(false)}
+                disabled={bulkAssigning}
+                className="px-4 py-2 rounded-lg border border-border"
+              >
+                {bulkAssignResult ? "Đóng" : "Hủy"}
+              </button>
+              {!bulkAssignResult && (
+                <button
+                  onClick={handleBulkAssign}
+                  disabled={bulkAssigning}
+                  className="px-4 py-2 rounded-lg bg-amber-600 text-white disabled:opacity-50 flex items-center gap-2"
+                >
+                  {bulkAssigning ? <Loader2 size={16} className="animate-spin" /> : <Ticket size={16} />}
+                  {bulkAssigning ? "Đang gán..." : "Xác nhận gán"}
+                </button>
+              )}
             </div>
           </div>
         </div>

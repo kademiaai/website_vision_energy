@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
+import {
   LayoutDashboard, History, Users, Settings, LogOut, Zap,
-  Sun, Moon, User, Trophy
+  Sun, Moon, User, Trophy, Ticket
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -59,6 +59,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Lịch sử lượt sạc", href: "/admin/sessions", icon: <History size={20} /> },
     { name: "Khách hàng", href: "/admin/customers", icon: <Users size={20} /> },
     { name: "Xếp hạng & Thưởng", href: "/admin/leaderboard", icon: <Trophy size={20} /> },
+    { name: "Kho E-voucher", href: "/admin/evouchers", icon: <Ticket size={20} /> },
     // { name: "Cài đặt", href: "/admin/settings", icon: <Settings size={20} /> },
   ];
 

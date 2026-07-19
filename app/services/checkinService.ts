@@ -2,7 +2,14 @@
 import { supabase } from "@/lib/supabase";
 import { rewardService } from "./rewardService";
 import { customerService } from "./customerService";
+import { evoucherService } from "./evoucherService";
+import { getCurrentVietnamDate } from "@/lib/timezone";
 import { Reward } from "@/lib/types/reward";
+import { EVoucher } from "@/lib/types/evoucher";
+
+// E-voucher check-in reminders only start on this day of the month, giving
+// the admin a few days' buffer to upload + assign after the 1st.
+const EVOUCHER_NOTIFICATION_START_DAY = 5;
 
 const CHECKIN_INTERVAL = 45; // phút (bạn có thể đổi thành 120 nếu muốn chặn 2 tiếng)
 
@@ -17,6 +24,7 @@ export interface CheckInResult {
     reward: Reward;
     type: "selection" | "completion";
   } | null;
+  pendingVoucher?: EVoucher | null;
 }
 
 /**
@@ -136,8 +144,14 @@ export const processCheckIn = async (
     console.error("Lỗi đếm lượt tháng:", countError);
   }
 
-  // --- BƯỚC 7: KIỂM TRA PHẦN THƯỞNG CHỜ THÔNG BÁO ---
-  const pendingReward = await rewardService.getPendingNotification(cleanPlate);
+  // --- BƯỚC 7: KIỂM TRA PHẦN THƯỞNG + E-VOUCHER CHỜ THÔNG BÁO (song song — hai bảng độc lập) ---
+  const { day: currentDay } = getCurrentVietnamDate();
+  const [pendingReward, pendingVoucher] = await Promise.all([
+    rewardService.getPendingNotification(cleanPlate),
+    currentDay >= EVOUCHER_NOTIFICATION_START_DAY
+      ? evoucherService.getPendingVoucherNotification(cleanPlate)
+      : Promise.resolve(null),
+  ]);
 
   // --- BƯỚC 8: TÍNH THỨ HẠNG TRONG THÁNG ---
   const rankings = await customerService.getCustomerRankings({
@@ -157,6 +171,7 @@ export const processCheckIn = async (
       ? "Đăng ký khách hàng mới thành công!"
       : "Check-in thành công!",
     pendingReward,
+    pendingVoucher,
   };
 };
 

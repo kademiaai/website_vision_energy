@@ -110,6 +110,42 @@ export const rewardService = {
   // ----------------------------------------------------------
 
   /**
+   * Look up a customer's reward row for a specific period (if any).
+   * Used when un-doing an e-voucher assignment to also clear the
+   * matching cash-reward history entry, if the admin asks for it.
+   */
+  async getRewardByPlateAndPeriod(
+    plate: string,
+    month: number,
+    year: number
+  ): Promise<Reward | null> {
+    const cleanPlate = normalizePlate(plate);
+    const { data, error } = await supabase
+      .from("rewards")
+      .select("*")
+      .eq("license_plate", cleanPlate)
+      .eq("month", month)
+      .eq("year", year)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data as Reward;
+  },
+
+  /**
+   * Records the first time a customer opened their assigned e-voucher for
+   * this reward — a "Đã mở quà" stage shown alongside reward.status.
+   * Only sets it once (first open); called from evoucherService.logOpen.
+   */
+  async markEvoucherOpened(rewardId: string): Promise<void> {
+    await supabase
+      .from("rewards")
+      .update({ evoucher_opened_at: new Date().toISOString() })
+      .eq("id", rewardId)
+      .is("evoucher_opened_at", null);
+  },
+
+  /**
    * Generate reward entries for selected customers.
    * Called by admin when selecting users from the leaderboard.
    */

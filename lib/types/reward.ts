@@ -19,6 +19,7 @@ export interface Reward {
   token: string;
   selection_seen_at: string | null;
   completion_seen_at: string | null;
+  evoucher_opened_at: string | null;
   created_at: string;
 }
 

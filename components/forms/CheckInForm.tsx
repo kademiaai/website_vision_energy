@@ -1,7 +1,7 @@
 // components/forms/CheckInForm.tsx - Cập nhật với Modal thông báo
 "use client";
 import { useState, useEffect } from "react";
-import { Car, User, Phone, CheckCircle, AlertCircle, Loader2, X, MessageCircle, Trophy, Zap, ChevronRight, Sparkles, Star, Info, AlertTriangle, History } from "lucide-react";
+import { Car, User, Phone, CheckCircle, AlertCircle, Loader2, X, MessageCircle, Trophy, Zap, ChevronRight, Sparkles, Star, Info, AlertTriangle, History, Gift, ExternalLink } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { translations } from "@/constants/translations";
@@ -10,6 +10,7 @@ import { processCheckIn } from "@/app/services/checkinService";
 import { rewardService } from "@/app/services/rewardService";
 import confetti from "canvas-confetti";
 import { Reward, RewardHistoryEntry } from "@/lib/types/reward";
+import { EVoucher } from "@/lib/types/evoucher";
 
 // Helper to format plate: 99H99999 -> 99H-99999
 const formatDisplayPlate = (plate: string) => {
@@ -33,6 +34,7 @@ export default function CheckInForm({ lang }: { lang: string }) {
     reward: any;
     type: "selection" | "completion";
   } | null>(null);
+  const [pendingVoucher, setPendingVoucher] = useState<EVoucher | null>(null);
   const [showRewardHistory, setShowRewardHistory] = useState(false);
   const [rewardHistory, setRewardHistory] = useState<RewardHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -142,11 +144,20 @@ export default function CheckInForm({ lang }: { lang: string }) {
         name: result.customerInfo?.full_name || ""
       });
 
-      // 3. Nếu có phần thưởng chờ thông báo: Ưu tiên hiện modal thưởng
+      // 3. Ưu tiên hiển thị: phần thưởng tiền mặt > e-voucher > modal thành công.
+      // pendingVoucher luôn được lưu (kể cả khi có pendingReward) để hiện nút mở
+      // e-voucher ngay trong modal thưởng — chỉ modal e-voucher riêng mới bị ẩn.
+      if (result.pendingVoucher) {
+        console.log("🎟️ Pending e-voucher detected:", result.pendingVoucher);
+        setPendingVoucher(result.pendingVoucher);
+      }
+
       if (result.pendingReward) {
         console.log("🎁 Pending reward detected, showing reward modal:", result.pendingReward);
         setPendingReward(result.pendingReward);
         setShowSuccess(false); // Đảm bảo modal thành công không che mất
+      } else if (result.pendingVoucher) {
+        setShowSuccess(false);
       } else {
         setShowSuccess(true);
       }
@@ -192,6 +203,31 @@ export default function CheckInForm({ lang }: { lang: string }) {
         origin: { y: 0.6 },
         colors: ['#0070f3', '#00dfd8', '#ffffff']
       });
+    }
+  };
+
+  const openRewardHistory = async () => {
+    const plateForHistory = formData.plate
+      ? formData.plate.replace("-", "")
+      : lastCheckedPlate;
+
+    setLoadingHistory(true);
+    setShowRewardHistory(true);
+
+    if (!plateForHistory) {
+      setRewardHistory([]);
+      setLoadingHistory(false);
+      return;
+    }
+
+    try {
+      const history = await rewardService.getRewardHistory(plateForHistory);
+      setRewardHistory(history);
+    } catch (error) {
+      console.error("Lỗi lấy lịch sử:", error);
+      setRewardHistory([]);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -575,31 +611,7 @@ export default function CheckInForm({ lang }: { lang: string }) {
 
                 {/* History Button */}
                 <button
-                  onClick={async () => {
-                    const plateForHistory = formData.plate
-                      ? formData.plate.replace("-", "")
-                      : lastCheckedPlate;
-
-                    setLoadingHistory(true);
-                    setShowRewardHistory(true);
-
-                    if (!plateForHistory) {
-                      // Nothing to query — show empty state
-                      setRewardHistory([]);
-                      setLoadingHistory(false);
-                      return;
-                    }
-
-                    try {
-                      const history = await rewardService.getRewardHistory(plateForHistory);
-                      setRewardHistory(history);
-                    } catch (error) {
-                      console.error("Lỗi lấy lịch sử:", error);
-                      setRewardHistory([]);
-                    } finally {
-                      setLoadingHistory(false);
-                    }
-                  }}
+                  onClick={openRewardHistory}
                   className="w-full border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/5 text-primary font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-all"
                 >
                   <History size={20} />
@@ -813,21 +825,56 @@ export default function CheckInForm({ lang }: { lang: string }) {
                     </motion.a>
                   ) : (
                     <>
-                      <motion.button
-                        onClick={() => handleCloseReward(true)}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="block w-full bg-white text-red-700 font-black py-3 rounded-lg shadow-xl shadow-black/10 transition-all text-xs sm:text-sm uppercase tracking-wider"
-                      >
-                        ĐÃ NHẬN ĐƯỢC QUÀ
-                      </motion.button>
+                      {pendingVoucher && (
+                        <motion.a
+                          href={`/evouchers/${pendingVoucher.token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{
+                            scale: 1,
+                            opacity: 1,
+                            boxShadow: [
+                              "0 0 0px rgba(16,185,129,0)",
+                              "0 0 24px rgba(16,185,129,0.85)",
+                              "0 0 8px rgba(16,185,129,0.4)",
+                            ],
+                          }}
+                          transition={{ duration: 1.4 }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="relative block w-full bg-gradient-to-r from-emerald-400 to-teal-500 text-emerald-950 font-black py-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm uppercase tracking-wider"
+                        >
+                          <span className="absolute -top-2 -right-2 bg-yellow-300 text-red-700 text-[8px] font-black px-2 py-0.5 rounded-full shadow-md">
+                            MỚI
+                          </span>
+                          <Gift size={18} />
+                          Mở E-voucher tháng này
+                        </motion.a>
+                      )}
 
                       <button
-                        onClick={() => handleCloseReward(false)}
-                        className="block w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2 rounded-lg transition-all text-[8px] sm:text-[10px] uppercase tracking-widest border border-white/10"
+                        onClick={() => handleCloseReward(true)}
+                        className="block w-full bg-white/10 hover:bg-white/20 text-white border border-white/25 font-normal py-2.5 rounded-lg transition-colors text-sm"
                       >
-                        BỎ QUA (NHẮC LẠI SAU)
+                        Đã nhận được quà
                       </button>
+
+                      <div className="flex items-center justify-center gap-2 pt-1">
+                        <button
+                          onClick={() => handleCloseReward(false)}
+                          className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/80 text-[10px] font-medium transition-all"
+                        >
+                          Bỏ qua (nhắc lại sau)
+                        </button>
+                        <button
+                          onClick={openRewardHistory}
+                          className="flex items-center gap-1 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white/80 text-[10px] font-medium transition-all"
+                        >
+                          <History size={11} />
+                          Lịch sử quà
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -846,6 +893,75 @@ export default function CheckInForm({ lang }: { lang: string }) {
                       })} - {new Date(pendingReward.reward.rewarded_at).toLocaleDateString('vi-VN')}
                     </p>
                   )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: THÔNG BÁO E-VOUCHER CHỜ MỞ (chỉ ẩn khi modal "completion" đang hiện — modal đó đã có sẵn nút mở e-voucher. Modal "selection" (thông báo trúng thưởng cũ chưa xử lý) không có nút này nên không được che mất thông báo e-voucher) */}
+      <AnimatePresence>
+        {pendingVoucher && !(pendingReward && pendingReward.type === "completion") && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="relative max-w-[340px] w-full rounded-[2rem] overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.4)] border-2 border-white/20 bg-gradient-to-b from-emerald-500 via-emerald-600 to-teal-800"
+            >
+              <div className="absolute inset-0 opacity-20 pointer-events-none">
+                <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
+              </div>
+
+              <div className="relative p-5 sm:p-6 text-center text-white">
+                <button
+                  onClick={() => setPendingVoucher(null)}
+                  className="absolute top-3 right-3 p-1.5 hover:bg-white/10 rounded-full transition-colors z-10"
+                >
+                  <X size={18} />
+                </button>
+
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-b from-white/20 to-white/5 backdrop-blur-xl rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-2xl border border-white/30">
+                  <Gift size={32} className="text-yellow-300 drop-shadow-[0_0_10px_rgba(253,224,71,0.5)]" />
+                </div>
+
+                <h3 className="text-[15px] sm:text-[16px] font-black mb-2 tracking-tighter drop-shadow-lg uppercase leading-none">
+                  BẠN CÓ MỘT E-VOUCHER!
+                </h3>
+
+                <div className="bg-black/20 backdrop-blur-md rounded-xl p-3 sm:p-4 mb-5 border border-white/10 shadow-inner">
+                  <p className="text-xs sm:text-sm text-white font-bold leading-tight">
+                    Xe <span className="text-yellow-300">{formatDisplayPlate(pendingVoucher.assigned_license_plate || "")}</span> được tặng thẻ quà tặng trị giá{" "}
+                    <span className="text-yellow-300 text-lg block mt-1">
+                      {pendingVoucher.denomination.toLocaleString("vi-VN")}đ
+                    </span>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <motion.a
+                    href={`/evouchers/${pendingVoucher.token}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="block w-full bg-gradient-to-r from-yellow-300 to-amber-500 text-amber-950 font-black py-3 rounded-lg shadow-xl shadow-yellow-500/20 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm uppercase tracking-wider"
+                  >
+                    <ExternalLink size={18} />
+                    Mở thẻ quà tặng
+                  </motion.a>
+
+                  <button
+                    onClick={() => setPendingVoucher(null)}
+                    className="block w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2 rounded-lg transition-all text-[8px] sm:text-[10px] uppercase tracking-widest border border-white/10"
+                  >
+                    ĐỂ SAU, NHẮC LẠI SAU
+                  </button>
                 </div>
               </div>
             </motion.div>
