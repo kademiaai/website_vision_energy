@@ -284,6 +284,43 @@ export const rewardService = {
   },
 
   /**
+   * Verify a customer's identity by plate + phone directly against the
+   * customers table (no reward/token involved). Used by the standalone
+   * "view reward history" lookup on the check-in page.
+   */
+  async verifyCustomerByPlate(
+    plate: string,
+    phone: string
+  ): Promise<{ verified: boolean; message: string }> {
+    const cleanPlate = normalizePlate(plate);
+
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("phone_number")
+      .eq("license_plate", cleanPlate)
+      .maybeSingle();
+
+    if (!customer) {
+      return {
+        verified: false,
+        message: "Không tìm thấy khách hàng với biển số này.",
+      };
+    }
+
+    const cleanDbPhone = (customer.phone_number || "").replace(/\s/g, "");
+    const cleanInputPhone = phone.replace(/\s/g, "");
+
+    if (cleanDbPhone !== cleanInputPhone) {
+      return {
+        verified: false,
+        message: "Số điện thoại không khớp với thông tin đã đăng ký.",
+      };
+    }
+
+    return { verified: true, message: "Xác minh thành công." };
+  },
+
+  /**
    * Submit reward claim from the customer portal.
    * Allows re-submission for processing, rejected, and completed statuses.
    */

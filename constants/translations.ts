@@ -30,6 +30,12 @@ export const translations = {
     provideInfoForRegistration: "Vui lòng cung cấp thông tin cá nhân để đăng ký",
     examplePlate: "VD: 51H-12345",
     registrationSuccess: "Đăng ký thành công!",
+    viewRewardHistoryBtn: "Xem lịch sử quà",
+    lookupModalTitle: "Tra cứu lịch sử quà tặng",
+    lookupModalSubtitle: "Nhập biển số và số điện thoại để xác minh danh tính",
+    lookupSubmitBtn: "Xác minh & Xem lịch sử",
+    lookupInvalidPlate: "Vui lòng nhập biển số hợp lệ",
+    lookupAttemptsWarning: "Bạn đã nhập sai nhiều lần. Vui lòng kiểm tra lại thông tin.",
 
     // Amenities Section
     amenitiesTitle: "Trạm Sạc Nhanh – Tiện ích Đầy Đủ",
@@ -144,6 +150,12 @@ export const translations = {
     provideInfoForRegistration: "Please provide personal information for registration",
     examplePlate: "e.g., 51H-12345",
     registrationSuccess: "Registration successful!",
+    viewRewardHistoryBtn: "View Reward History",
+    lookupModalTitle: "Reward History Lookup",
+    lookupModalSubtitle: "Enter your license plate and phone number to verify your identity",
+    lookupSubmitBtn: "Verify & View History",
+    lookupInvalidPlate: "Please enter a valid license plate",
+    lookupAttemptsWarning: "Multiple failed attempts. Please double-check your information.",
 
     // Amenities Section
     amenitiesTitle: "Fast Charging – Full Amenities",

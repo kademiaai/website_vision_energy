@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git diff *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(chromium-cli --help)",
+      "Bash(npx --no-install playwright --version)"
     ],
     "additionalDirectories": [
       "C:\\Users\\TRANK09\\AppData\\Local\\Temp\\claude\\c--GitHub-website-vision-energy\\2196237f-b8dd-40ba-8add-79ebe79c3396\\scratchpad"

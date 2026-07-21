@@ -39,6 +39,12 @@ export default function CheckInForm({ lang }: { lang: string }) {
   const [rewardHistory, setRewardHistory] = useState<RewardHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [lastCheckedPlate, setLastCheckedPlate] = useState("");
+  const [showLookupVerify, setShowLookupVerify] = useState(false);
+  const [lookupPlate, setLookupPlate] = useState("");
+  const [lookupPhone, setLookupPhone] = useState("");
+  const [lookupError, setLookupError] = useState("");
+  const [lookupVerifying, setLookupVerifying] = useState(false);
+  const [lookupAttempts, setLookupAttempts] = useState(0);
   const t = translations[lang as keyof typeof translations];
   const [lastNotificationId, setLastNotificationId] = useState<string | null>(null);
 
@@ -206,22 +212,18 @@ export default function CheckInForm({ lang }: { lang: string }) {
     }
   };
 
-  const openRewardHistory = async () => {
-    const plateForHistory = formData.plate
-      ? formData.plate.replace("-", "")
-      : lastCheckedPlate;
-
+  const fetchAndShowRewardHistory = async (plate: string) => {
     setLoadingHistory(true);
     setShowRewardHistory(true);
 
-    if (!plateForHistory) {
+    if (!plate) {
       setRewardHistory([]);
       setLoadingHistory(false);
       return;
     }
 
     try {
-      const history = await rewardService.getRewardHistory(plateForHistory);
+      const history = await rewardService.getRewardHistory(plate);
       setRewardHistory(history);
     } catch (error) {
       console.error("Lỗi lấy lịch sử:", error);
@@ -229,6 +231,75 @@ export default function CheckInForm({ lang }: { lang: string }) {
     } finally {
       setLoadingHistory(false);
     }
+  };
+
+  const openRewardHistory = async () => {
+    const plateForHistory = formData.plate
+      ? formData.plate.replace("-", "")
+      : lastCheckedPlate;
+    await fetchAndShowRewardHistory(plateForHistory);
+  };
+
+  // --- Standalone reward-history lookup (plate + phone verification) ---
+  const handleLookupPlateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (val.length > 3) {
+      val = val.slice(0, 3) + "-" + val.slice(3, 8);
+    }
+    setLookupPlate(val);
+    if (lookupError) setLookupError("");
+  };
+
+  const handleLookupPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\D/g, "");
+    if (val.length > 7) {
+      val = `${val.slice(0, 4)} ${val.slice(4, 7)} ${val.slice(7, 10)}`;
+    } else if (val.length > 4) {
+      val = `${val.slice(0, 4)} ${val.slice(4, 7)}`;
+    }
+    setLookupPhone(val);
+    if (lookupError) setLookupError("");
+  };
+
+  const closeLookupVerify = () => {
+    setShowLookupVerify(false);
+    setLookupPlate("");
+    setLookupPhone("");
+    setLookupError("");
+  };
+
+  const handleLookupVerify = async () => {
+    setLookupError("");
+    const cleanPlate = lookupPlate.replace("-", "");
+    const cleanPhone = lookupPhone.replace(/\s/g, "");
+
+    if (!cleanPlate || cleanPlate.length < 5) {
+      setLookupError(t.lookupInvalidPlate);
+      return;
+    }
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setLookupError(t.invalidPhone);
+      return;
+    }
+
+    setLookupVerifying(true);
+    const result = await rewardService.verifyCustomerByPlate(cleanPlate, cleanPhone);
+    setLookupVerifying(false);
+
+    if (!result.verified) {
+      const attempts = lookupAttempts + 1;
+      setLookupAttempts(attempts);
+      setLookupError(
+        attempts >= 5 ? `${result.message} ${t.lookupAttemptsWarning}` : result.message
+      );
+      return;
+    }
+
+    setLookupAttempts(0);
+    setShowLookupVerify(false);
+    setLookupPlate("");
+    setLookupPhone("");
+    await fetchAndShowRewardHistory(cleanPlate);
   };
 
   const handleCloseReward = async (confirmReceived: boolean = false) => {
@@ -249,25 +320,35 @@ export default function CheckInForm({ lang }: { lang: string }) {
         className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-3xl p-8 shadow-2xl shadow-primary/5"
       >
         {/* HEADER */}
-        <div className="flex items-start justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
-                <Zap size={28} className="text-white" />
+        <div className="mb-8">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="w-14 h-14 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+                  <Zap size={28} className="text-white" />
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full border-2 border-primary flex items-center justify-center">
+                  <Sparkles size={10} className="text-primary" />
+                </div>
               </div>
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full border-2 border-primary flex items-center justify-center">
-                <Sparkles size={10} className="text-primary" />
+              <div>
+                <h2 className="text-2xl font-bold text-foreground tracking-tight">
+                  {t.checkinTitle}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t.fillInfoToCharge}
+                </p>
               </div>
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-foreground tracking-tight">
-                {t.checkinTitle}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t.fillInfoToCharge}
-              </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowLookupVerify(true)}
+            className="mt-4 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 px-3 py-2.5 rounded-xl border border-primary/20 transition-colors"
+          >
+            <History size={14} />
+            <span>{t.viewRewardHistoryBtn}</span>
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -656,6 +737,101 @@ export default function CheckInForm({ lang }: { lang: string }) {
                   className="w-full bg-foreground text-background font-bold py-4 rounded-xl hover:opacity-90 transition-opacity"
                 >
                   Đã hiểu
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: TRA CỨU LỊCH SỬ QUÀ (XÁC MINH BIỂN SỐ + SĐT) */}
+      <AnimatePresence>
+        {showLookupVerify && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/95 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-card border border-border/50 rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
+                    <History size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-foreground">
+                      {t.lookupModalTitle}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {t.lookupModalSubtitle}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeLookupVerify}
+                  className="p-2 hover:bg-muted rounded-lg transition-colors"
+                >
+                  <X size={20} className="text-muted-foreground" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-foreground/90 flex items-center gap-2">
+                    <Car size={18} className="text-primary" />
+                    {t.plateLabel}
+                  </label>
+                  <input
+                    type="text"
+                    value={lookupPlate}
+                    onChange={handleLookupPlateChange}
+                    placeholder="51H-123.45"
+                    className="w-full px-6 py-4 text-lg rounded-xl border-2 font-medium tracking-wide bg-background/50 border-border/70 transition-all duration-200 focus:outline-none focus:ring-4 focus:border-primary focus:ring-primary/20"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-foreground/90 flex items-center gap-2">
+                    <Phone size={18} className="text-primary" />
+                    {t.phoneLabel}
+                  </label>
+                  <input
+                    type="tel"
+                    value={lookupPhone}
+                    onChange={handleLookupPhoneChange}
+                    placeholder={t.phoneLabel}
+                    className="w-full px-6 py-4 rounded-xl border-2 bg-background/50 border-border/70 transition-all duration-200 focus:outline-none focus:ring-4 focus:border-primary focus:ring-primary/20"
+                  />
+                </div>
+
+                {lookupError && (
+                  <div className="flex items-start gap-2 text-sm text-red-500">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span className="font-medium">{lookupError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleLookupVerify}
+                  disabled={lookupVerifying}
+                  className="w-full bg-gradient-to-r from-primary to-primary/90 hover:from-primary hover:to-primary/80 text-primary-foreground font-semibold py-4 rounded-xl shadow-lg shadow-primary/25 transition-all duration-200 flex items-center justify-center gap-3"
+                >
+                  {lookupVerifying ? (
+                    <Loader2 size={22} className="animate-spin" />
+                  ) : (
+                    <>
+                      <CheckCircle size={20} />
+                      <span>{t.lookupSubmitBtn}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

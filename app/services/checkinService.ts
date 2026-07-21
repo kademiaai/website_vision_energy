@@ -11,7 +11,7 @@ import { EVoucher } from "@/lib/types/evoucher";
 // the admin a few days' buffer to upload + assign after the 1st.
 const EVOUCHER_NOTIFICATION_START_DAY = 5;
 
-const CHECKIN_INTERVAL = 45; // phút (bạn có thể đổi thành 120 nếu muốn chặn 2 tiếng)
+const CHECKIN_INTERVAL = 180; // phút (bạn có thể đổi thành 120 nếu muốn chặn 2 tiếng)
 
 export interface CheckInResult {
   isNewCustomer: boolean;
