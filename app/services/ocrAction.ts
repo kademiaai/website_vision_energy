@@ -7,6 +7,22 @@ export type OcrResult = {
   id_number?: string;
 };
 
+const PUTER_TOKEN_EXPIRED_MESSAGE =
+  "Token xác thực AI đã hết hạn. Vui lòng liên hệ quản trị viên để làm mới (chạy scratch/refresh-puter-token.js).";
+
+// PUTER_AUTH_TOKEN is a browser session token, not a stable API key — it
+// periodically expires and Puter responds with 401 { code: "reauth_required" }.
+// Detect that specifically so it isn't confused with a genuine AI outage.
+function isPuterAuthExpired(status: number, errorText: string): boolean {
+  if (status !== 401 && status !== 403) return false;
+  try {
+    const body = JSON.parse(errorText);
+    return body?.code === "reauth_required";
+  } catch {
+    return errorText.includes("reauth_required");
+  }
+}
+
 /**
  * CLEAN & OPTIMIZED OCR Service Action.
  * Uses Puter's OpenAI-compatible REST API for maximum stability and speed.
@@ -59,8 +75,13 @@ export async function performOcr(formData: FormData): Promise<OcrResult> {
 
     if (!response.ok) {
       const errorText = await response.text();
-      // [FALLBACK] If GPT-4o-Mini fails, try Mistral as a second option
-      console.warn(`[OCR] GPT-4o-mini failed (${response.status}), trying Mistral...`);
+      console.warn(`[OCR] GPT-4o-mini failed (${response.status}): ${errorText}`);
+      if (isPuterAuthExpired(response.status, errorText)) {
+        throw new Error(PUTER_TOKEN_EXPIRED_MESSAGE);
+      }
+
+      // [FALLBACK] If GPT-4o-Mini fails for a non-auth reason, try Mistral as a second option
+      console.warn(`[OCR] Trying Mistral fallback...`);
       const retryResponse = await fetch(url, {
         method: "POST",
         headers: {
@@ -83,6 +104,11 @@ export async function performOcr(formData: FormData): Promise<OcrResult> {
       });
 
       if (!retryResponse.ok) {
+        const retryErrorText = await retryResponse.text();
+        console.error(`[OCR] Mistral fallback failed (${retryResponse.status}): ${retryErrorText}`);
+        if (isPuterAuthExpired(retryResponse.status, retryErrorText)) {
+          throw new Error(PUTER_TOKEN_EXPIRED_MESSAGE);
+        }
         throw new Error("Dịch vụ AI hiện không khả dụng. Vui lòng thử lại sau.");
       }
       return processAiResponse(await retryResponse.json());
