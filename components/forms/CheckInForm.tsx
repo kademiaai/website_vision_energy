@@ -8,6 +8,7 @@ import { translations } from "@/constants/translations";
 import { supabase } from "@/lib/supabase";
 import { processCheckIn } from "@/app/services/checkinService";
 import { rewardService } from "@/app/services/rewardService";
+import { evoucherService } from "@/app/services/evoucherService";
 import confetti from "canvas-confetti";
 import { Reward, RewardHistoryEntry } from "@/lib/types/reward";
 import { EVoucher } from "@/lib/types/evoucher";
@@ -38,6 +39,7 @@ export default function CheckInForm({ lang }: { lang: string }) {
   const [showRewardHistory, setShowRewardHistory] = useState(false);
   const [rewardHistory, setRewardHistory] = useState<RewardHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyVouchers, setHistoryVouchers] = useState<Record<string, EVoucher>>({});
   const [lastCheckedPlate, setLastCheckedPlate] = useState("");
   const [showLookupVerify, setShowLookupVerify] = useState(false);
   const [lookupPlate, setLookupPlate] = useState("");
@@ -215,6 +217,7 @@ export default function CheckInForm({ lang }: { lang: string }) {
   const fetchAndShowRewardHistory = async (plate: string) => {
     setLoadingHistory(true);
     setShowRewardHistory(true);
+    setHistoryVouchers({});
 
     if (!plate) {
       setRewardHistory([]);
@@ -225,6 +228,28 @@ export default function CheckInForm({ lang }: { lang: string }) {
     try {
       const history = await rewardService.getRewardHistory(plate);
       setRewardHistory(history);
+
+      // For completed rewards, look up the assigned e-voucher (if any) so the
+      // user can reopen its link straight from their history.
+      const completed = history.filter((r) => r.status === "completed");
+      if (completed.length > 0) {
+        const entries = await Promise.all(
+          completed.map(async (r) => {
+            try {
+              const voucher = await evoucherService.getAssignedVoucherForPlate(plate, r.month, r.year);
+              return [`${r.month}-${r.year}`, voucher] as const;
+            } catch (err) {
+              console.warn("Không thể lấy e-voucher cho", r.month, r.year, err);
+              return [`${r.month}-${r.year}`, null] as const;
+            }
+          })
+        );
+        const voucherMap: Record<string, EVoucher> = {};
+        entries.forEach(([key, voucher]) => {
+          if (voucher) voucherMap[key] = voucher;
+        });
+        setHistoryVouchers(voucherMap);
+      }
     } catch (error) {
       console.error("Lỗi lấy lịch sử:", error);
       setRewardHistory([]);
@@ -907,6 +932,17 @@ export default function CheckInForm({ lang }: { lang: string }) {
                           >
                             NHẬN NGAY
                           </Link>
+                        )}
+                        {reward.status === 'completed' && historyVouchers[`${reward.month}-${reward.year}`] && (
+                          <a
+                            href={`/evouchers/${historyVouchers[`${reward.month}-${reward.year}`].token}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-end gap-1 text-[10px] text-primary font-black mt-1 underline"
+                          >
+                            <ExternalLink size={10} />
+                            MỞ LẠI QUÀ
+                          </a>
                         )}
                       </div>
                     </div>

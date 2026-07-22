@@ -5,7 +5,14 @@
       "Bash(git add *)",
       "Bash(chromium-cli --help)",
       "Bash(npx --no-install playwright --version)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npm install *)",
+      "Bash(NODE_PATH=\"C:\\\\GitHub\\\\website_vision_energy\\\\node_modules\" node \"C:\\\\Users\\\\TRANK09\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--GitHub-website-vision-energy\\\\bd0005ef-ab83-401b-ae3a-b50beb799610\\\\scratchpad\\\\verify-voucher.js\")",
+      "Bash(lsof -ti:3000 -sTCP:LISTEN)",
+      "Bash(xargs -r kill)",
+      "Bash(npm uninstall *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\TRANK09\\AppData\\Local\\Temp\\claude\\c--GitHub-website-vision-energy\\2196237f-b8dd-40ba-8add-79ebe79c3396\\scratchpad"
