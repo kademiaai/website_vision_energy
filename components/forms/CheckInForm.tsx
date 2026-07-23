@@ -366,15 +366,8 @@ export default function CheckInForm({ lang }: { lang: string }) {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowLookupVerify(true)}
-            className="mt-4 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 px-3 py-2.5 rounded-xl border border-primary/20 transition-colors"
-          >
-            <History size={14} />
-            <span>{t.viewRewardHistoryBtn}</span>
-          </button>
         </div>
+
 
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* PLATE INPUT */}
@@ -535,6 +528,15 @@ export default function CheckInForm({ lang }: { lang: string }) {
               </>
             )}
           </motion.button>
+
+          <button
+            type="button"
+            onClick={() => setShowLookupVerify(true)}
+            className="mt-4 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 px-3 py-2.5 rounded-xl border border-primary/20 transition-colors"
+          >
+            <History size={14} />
+            <span>{t.viewRewardHistoryBtn}</span>
+          </button>
 
           {/* SECURITY NOTE */}
           <div className="text-center pt-4">
