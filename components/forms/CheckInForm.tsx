@@ -529,14 +529,18 @@ export default function CheckInForm({ lang }: { lang: string }) {
             )}
           </motion.button>
 
-          <button
+          <motion.button
             type="button"
             onClick={() => setShowLookupVerify(true)}
-            className="mt-4 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 px-3 py-2.5 rounded-xl border border-primary/20 transition-colors"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="mt-6 w-full flex items-center justify-center gap-3 text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-6 py-4 rounded-xl border-2 border-amber-400/50 shadow-lg shadow-amber-500/30 transition-all duration-200 relative overflow-hidden group"
           >
-            <History size={14} />
-            <span>{t.viewRewardHistoryBtn}</span>
-          </button>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+            <History size={20} className="group-hover:rotate-[-12deg] transition-transform" />
+            <span className="tracking-wide">{t.viewRewardHistoryBtn}</span>
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse opacity-70" />
+          </motion.button>
 
           {/* SECURITY NOTE */}
           <div className="text-center pt-4">
