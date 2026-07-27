@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Gift, Loader2, AlertCircle, Zap, CalendarClock, ExternalLink, CheckCircle } from "lucide-react";
+import { Gift, Loader2, AlertCircle, Zap, CalendarClock, ExternalLink, CheckCircle, Copy, Check } from "lucide-react";
 import { evoucherService } from "@/app/services/evoucherService";
 import { formatVietnamTime } from "@/lib/timezone";
 import type { EVoucher } from "@/lib/types/evoucher";
@@ -14,6 +14,7 @@ export default function EVoucherOpenPage() {
   const [opening, setOpening] = useState(false);
   const [voucher, setVoucher] = useState<EVoucher | null>(null);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -45,6 +46,14 @@ export default function EVoucherOpenPage() {
     } finally {
       setOpening(false);
     }
+  };
+
+  const handleCopyLink = () => {
+    if (!voucher?.link) return;
+    navigator.clipboard.writeText(voucher.link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   if (loading) {
@@ -130,6 +139,23 @@ export default function EVoucherOpenPage() {
                 <>
                   <ExternalLink size={18} />
                   {voucher.status === "opened" ? "Mở lại thẻ quà tặng" : "Mở thẻ quà tặng"}
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleCopyLink}
+              className="w-full py-2.5 border border-border rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-2"
+            >
+              {copied ? (
+                <>
+                  <Check size={16} className="text-green-500" />
+                  <span className="text-green-600">✓ Đã copy!</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={16} />
+                  Sao chép link để mở sau
                 </>
               )}
             </button>
