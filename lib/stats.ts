@@ -108,3 +108,33 @@ export function circularDistanceHours(a: number, b: number): number {
   const diff = Math.abs(a - b) % 24;
   return Math.min(diff, 24 - diff);
 }
+
+/** Sum of `windowSize` consecutive values starting at `startIndex`, wrapping around the array (a 24h clock). */
+export function slidingWindowSum(counts: number[], windowSize: number, startIndex: number): number {
+  let sum = 0;
+  for (let i = 0; i < windowSize; i++) {
+    sum += counts[(startIndex + i) % counts.length];
+  }
+  return sum;
+}
+
+/**
+ * The wrapping window of `windowSize` consecutive buckets with the highest
+ * (mode: "max") or lowest (mode: "min") total — e.g. the 3-hour band with
+ * the most check-ins, for the peak/quiet-hour-band auto-summary. Ties
+ * resolve to the earliest (lowest-index) window.
+ */
+export function findExtremeWindow(
+  counts: number[],
+  windowSize: number,
+  mode: "max" | "min"
+): { startIndex: number; sum: number } {
+  let best = { startIndex: 0, sum: slidingWindowSum(counts, windowSize, 0) };
+  for (let i = 1; i < counts.length; i++) {
+    const sum = slidingWindowSum(counts, windowSize, i);
+    if ((mode === "max" && sum > best.sum) || (mode === "min" && sum < best.sum)) {
+      best = { startIndex: i, sum };
+    }
+  }
+  return best;
+}

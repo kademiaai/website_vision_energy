@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { circularDistanceHours, circularMeanHour, iqr, mad, median, modalBucket, percentile } from "./stats";
+import {
+  circularDistanceHours,
+  circularMeanHour,
+  findExtremeWindow,
+  iqr,
+  mad,
+  median,
+  modalBucket,
+  percentile,
+  slidingWindowSum,
+} from "./stats";
 
 describe("median", () => {
   it("returns the middle value for an odd-length array", () => {
@@ -103,5 +113,49 @@ describe("circularDistanceHours", () => {
 
   it("returns 0 for identical hours", () => {
     expect(circularDistanceHours(5, 5)).toBe(0);
+  });
+});
+
+describe("slidingWindowSum", () => {
+  it("sums a plain in-bounds window", () => {
+    const counts = [1, 2, 3, 4, 5];
+    expect(slidingWindowSum(counts, 3, 0)).toBe(1 + 2 + 3);
+    expect(slidingWindowSum(counts, 3, 2)).toBe(3 + 4 + 5);
+  });
+
+  it("wraps around the end of the array (24h clock)", () => {
+    const counts = [10, 0, 0, 0, 0, 20]; // hours 0..5
+    // window starting at hour 4, size 3 -> hours 4,5,0
+    expect(slidingWindowSum(counts, 3, 4)).toBe(0 + 20 + 10);
+  });
+});
+
+describe("findExtremeWindow", () => {
+  it("finds the 3-hour band with the highest total (peak window)", () => {
+    // 24 hourly buckets, all zero except a cluster at hours 17-19.
+    const counts = new Array(24).fill(0);
+    counts[17] = 5;
+    counts[18] = 8;
+    counts[19] = 4;
+    const peak = findExtremeWindow(counts, 3, "max");
+    expect(peak.startIndex).toBe(17);
+    expect(peak.sum).toBe(17);
+  });
+
+  it("finds the quiet window, wrapping past midnight", () => {
+    // Busy all day except hours 23,0,1 (wraps around midnight).
+    const counts = new Array(24).fill(10);
+    counts[23] = 0;
+    counts[0] = 1;
+    counts[1] = 0;
+    const quiet = findExtremeWindow(counts, 3, "min");
+    expect(quiet.startIndex).toBe(23);
+    expect(quiet.sum).toBe(1);
+  });
+
+  it("resolves ties to the earliest window", () => {
+    const counts = [5, 5, 5, 5];
+    const peak = findExtremeWindow(counts, 2, "max");
+    expect(peak.startIndex).toBe(0);
   });
 });

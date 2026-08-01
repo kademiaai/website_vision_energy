@@ -122,6 +122,45 @@ export function getVietnamWeekday(utcTimestamp: string): number {
 export const VIETNAM_WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"] as const;
 
 /**
+ * Vietnam calendar date (YYYY-MM-DD) a UTC timestamp falls on — the general
+ * form of getCurrentVietnamDateISO(), for an arbitrary timestamp instead of
+ * "now". Used to bucket rows by Vietnam calendar day for daily charts.
+ */
+export function getVietnamDateKey(utcTimestamp: string): string {
+  const vietnamTime = new Date(new Date(utcTimestamp).getTime() + VIETNAM_OFFSET_HOURS * 60 * 60 * 1000);
+  const y = vietnamTime.getUTCFullYear();
+  const m = String(vietnamTime.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(vietnamTime.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Inclusive number of calendar days between two "YYYY-MM-DD" date keys
+ * (as returned by getVietnamDateKey/getCurrentVietnamDateISO). Same day
+ * returns 1.
+ */
+export function daysBetweenDateKeys(startKey: string, endKey: string): number {
+  const start = new Date(`${startKey}T00:00:00Z`).getTime();
+  const end = new Date(`${endKey}T00:00:00Z`).getTime();
+  return Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1;
+}
+
+/**
+ * List every "YYYY-MM-DD" date key from startKey to endKey inclusive.
+ * Used to zero-fill days with no check-ins in daily charts, so a quiet day
+ * shows as a gap in the data rather than being silently skipped.
+ */
+export function enumerateDateKeys(startKey: string, endKey: string): string[] {
+  const start = new Date(`${startKey}T00:00:00Z`).getTime();
+  const end = new Date(`${endKey}T00:00:00Z`).getTime();
+  const keys: string[] = [];
+  for (let t = start; t <= end; t += 24 * 60 * 60 * 1000) {
+    keys.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
+/**
  * Format a UTC timestamp string to Vietnam local display.
  * Returns format: "DD/MM/YYYY HH:mm"
  */

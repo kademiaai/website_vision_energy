@@ -3,7 +3,7 @@
 // into concrete UTC ISO boundaries, computed against Vietnam calendar days —
 // shared by the client FilterBar and every /api/analytics/* route so the
 // two never disagree about what "7 ngày" or "Tháng này" actually means.
-import { getCurrentVietnamDate } from "./timezone";
+import { daysBetweenDateKeys, getCurrentVietnamDate, getVietnamDateKey } from "./timezone";
 
 const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
@@ -15,6 +15,8 @@ export interface AnalyticsRange {
   startISO: string;
   /** Upper bound, UTC ISO — "now" for quick ranges, end-of-day for custom. */
   endISO: string;
+  /** Inclusive count of Vietnam calendar days spanned by [startISO, endISO]. */
+  daysInRange: number;
 }
 
 /** Start of a given Vietnam calendar day (00:00:00 local), as a UTC Date. */
@@ -51,6 +53,8 @@ export function resolveAnalyticsRange(
     ? (rangeParam as AnalyticsRangeType)
     : "7d";
 
+  let resolved: { type: AnalyticsRangeType; startISO: string; endISO: string } | null = null;
+
   if (requestedType === "custom" && startParam && endParam) {
     const startDate = parseDateParam(startParam);
     const endDate = parseDateParam(endParam);
@@ -61,21 +65,30 @@ export function resolveAnalyticsRange(
       // A start date after the end date is a malformed filter — fall back
       // rather than return an inverted (empty) range silently.
       if (startUTC.getTime() <= endUTC.getTime()) {
-        return { type: "custom", startISO: startUTC.toISOString(), endISO: endUTC.toISOString() };
+        resolved = { type: "custom", startISO: startUTC.toISOString(), endISO: endUTC.toISOString() };
       }
     }
   }
 
-  if (requestedType === "today") {
-    return { type: "today", startISO: todayStart.toISOString(), endISO: now.toISOString() };
+  if (!resolved && requestedType === "today") {
+    resolved = { type: "today", startISO: todayStart.toISOString(), endISO: now.toISOString() };
   }
 
-  if (requestedType === "month") {
+  if (!resolved && requestedType === "month") {
     const monthStart = vietnamDateStartUTC(year, month, 1);
-    return { type: "month", startISO: monthStart.toISOString(), endISO: now.toISOString() };
+    resolved = { type: "month", startISO: monthStart.toISOString(), endISO: now.toISOString() };
   }
 
-  const daysBack = requestedType === "90d" ? 89 : 6; // inclusive of today
-  const startUTC = new Date(todayStart.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  return { type: requestedType === "90d" ? "90d" : "7d", startISO: startUTC.toISOString(), endISO: now.toISOString() };
+  if (!resolved) {
+    const daysBack = requestedType === "90d" ? 89 : 6; // inclusive of today
+    const startUTC = new Date(todayStart.getTime() - daysBack * 24 * 60 * 60 * 1000);
+    resolved = {
+      type: requestedType === "90d" ? "90d" : "7d",
+      startISO: startUTC.toISOString(),
+      endISO: now.toISOString(),
+    };
+  }
+
+  const daysInRange = daysBetweenDateKeys(getVietnamDateKey(resolved.startISO), getVietnamDateKey(resolved.endISO));
+  return { ...resolved, daysInRange };
 }
