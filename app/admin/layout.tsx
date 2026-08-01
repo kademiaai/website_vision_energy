@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, History, Users, Settings, LogOut, Zap,
-  Sun, Moon, User, Trophy, Ticket
+  Sun, Moon, User, Trophy, Ticket, BarChart3
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -60,8 +60,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Khách hàng", href: "/admin/customers", icon: <Users size={20} /> },
     { name: "Xếp hạng & Thưởng", href: "/admin/leaderboard", icon: <Trophy size={20} /> },
     { name: "Kho E-voucher", href: "/admin/evouchers", icon: <Ticket size={20} /> },
+    { name: "Phân tích & Insights", href: "/admin/analytics", icon: <BarChart3 size={20} /> },
     { name: "Quản lý hệ thống", href: "/admin/system", icon: <Settings size={20} /> },
   ];
+
+  // Sections with nested routes (currently only Phân tích & Insights) should
+  // stay highlighted for any sub-page, not just an exact path match.
+  const isMenuItemActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -117,7 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto" onClick={() => setSidebarOpen(false)}>
             {menuItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = isMenuItemActive(item.href);
               return (
                 <Link
                   key={item.href}
@@ -182,7 +187,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <LayoutDashboard size={24} className="text-primary" />
                 </button>
                 <div className="text-sm font-semibold text-foreground">
-                  {menuItems.find(item => pathname === item.href)?.name || 'Dashboard'}
+                  {menuItems.find(item => isMenuItemActive(item.href))?.name || 'Dashboard'}
                 </div>
               </div>
               

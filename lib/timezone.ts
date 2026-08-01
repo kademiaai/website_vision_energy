@@ -92,6 +92,36 @@ export function getLastDayOfMonthISO(month: number, year: number): string {
 }
 
 /**
+ * Hour of day (0-23) a UTC timestamp falls on in Vietnam time. Shifts the
+ * instant by the UTC+7 offset and reads the UTC hour, matching the
+ * shift-then-read-UTC-accessor pattern used elsewhere in this file (avoids
+ * depending on the server/browser process's own configured timezone, unlike
+ * `new Date(ts).getHours()` — see sessionService.ts's sessionsByHour, which
+ * uses that bug-prone pattern).
+ */
+export function getVietnamHour(utcTimestamp: string): number {
+  const vietnamTime = new Date(new Date(utcTimestamp).getTime() + VIETNAM_OFFSET_HOURS * 60 * 60 * 1000);
+  return vietnamTime.getUTCHours();
+}
+
+/**
+ * Weekday a UTC timestamp falls on in Vietnam time, as an index 0-6 where
+ * 0 = Monday (T2) ... 6 = Sunday (CN) — the Vietnamese week-start convention,
+ * not JS's native 0 = Sunday.
+ */
+export function getVietnamWeekday(utcTimestamp: string): number {
+  const vietnamTime = new Date(new Date(utcTimestamp).getTime() + VIETNAM_OFFSET_HOURS * 60 * 60 * 1000);
+  const jsDay = vietnamTime.getUTCDay(); // 0 = Sunday ... 6 = Saturday
+  return (jsDay + 6) % 7; // 0 = Monday ... 6 = Sunday
+}
+
+/**
+ * Vietnamese weekday labels indexed 0 (T2/Monday) - 6 (CN/Sunday), matching
+ * getVietnamWeekday()'s index convention.
+ */
+export const VIETNAM_WEEKDAY_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"] as const;
+
+/**
  * Format a UTC timestamp string to Vietnam local display.
  * Returns format: "DD/MM/YYYY HH:mm"
  */

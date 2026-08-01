@@ -30,6 +30,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // /api/analytics/* is server-side aggregation for the admin-only "Phân
+  // tích & Insights" section — same guard as /admin/*, but a 401 JSON
+  // response instead of a redirect since callers are fetch(), not browsers.
+  if (request.nextUrl.pathname.startsWith('/api/analytics') && !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   // Nếu đã login mà cố vào /login -> Đá sang /admin
   if (request.nextUrl.pathname === '/login' && user) {
     return NextResponse.redirect(new URL('/admin', request.url))
@@ -39,5 +46,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/login'],
+  matcher: ['/admin/:path*', '/login', '/api/analytics/:path*'],
 }
