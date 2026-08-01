@@ -30,15 +30,24 @@ sequenceDiagram
     
     Note over CheckIn: Normalize: "51F-029.42" → "51F02942"
 
+    CheckIn->>DB: SELECT checkin_settings (cooldown_minutes, max_checkins_per_day)
+    DB-->>CheckIn: settings
+
     alt Test plate (99H99999 / 90H9999)
-        CheckIn->>CheckIn: Bypass cooldown
+        CheckIn->>CheckIn: Bypass cooldown + daily limit
     else
         CheckIn->>DB: SELECT last session for plate
         DB-->>CheckIn: lastSession.start_time
-        CheckIn->>CheckIn: diffMinutes < 180?
+        CheckIn->>CheckIn: diffMinutes < settings.cooldown_minutes?
         alt Too soon
             CheckIn-->>Form: throw COOLDOWN:X minutes
             Form->>Customer: Show cooldown modal
+        end
+        CheckIn->>DB: COUNT sessions today for plate
+        DB-->>CheckIn: todayCount
+        alt todayCount >= settings.max_checkins_per_day
+            CheckIn-->>Form: throw DAILY_LIMIT:count/max
+            Form->>Customer: Show daily-limit modal
         end
     end
 

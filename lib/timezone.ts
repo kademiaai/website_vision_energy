@@ -69,6 +69,19 @@ export function getCurrentVietnamDateISO(): string {
 }
 
 /**
+ * Start of "today" (00:00:00 Vietnam time) as a UTC ISO timestamp.
+ * Comparable against timestamptz columns via .gte(). Used for the
+ * per-plate daily check-in limit so "per day" means the Vietnam
+ * calendar day, not the server/browser's UTC day.
+ */
+export function getVietnamDayStartISO(): string {
+  const { day, month, year } = getCurrentVietnamDate();
+  const startUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  startUTC.setUTCHours(startUTC.getUTCHours() - VIETNAM_OFFSET_HOURS);
+  return startUTC.toISOString();
+}
+
+/**
  * Last calendar day of a given month, as an ISO date string (YYYY-MM-DD).
  * Used to cap e-voucher expiry to the end of the month it was assigned for,
  * regardless of the (much later) expiry printed on the original gift card.

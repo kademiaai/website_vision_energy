@@ -3,7 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { rewardService } from "./rewardService";
 import { customerService } from "./customerService";
 import { evoucherService } from "./evoucherService";
-import { getCurrentVietnamDate } from "@/lib/timezone";
+import { checkinSettingsService } from "./checkinSettingsService";
+import { getCurrentVietnamDate, getVietnamDayStartISO } from "@/lib/timezone";
 import { Reward } from "@/lib/types/reward";
 import { EVoucher } from "@/lib/types/evoucher";
 
@@ -11,7 +12,11 @@ import { EVoucher } from "@/lib/types/evoucher";
 // the admin a few days' buffer to upload + assign after the 1st.
 const EVOUCHER_NOTIFICATION_START_DAY = 5;
 
-const CHECKIN_INTERVAL = 180; // phút (bạn có thể đổi thành 120 nếu muốn chặn 2 tiếng)
+// The cooldown + daily-limit values now live in the checkin_settings table
+// (see checkinSettingsService), editable from Admin > Quản lý hệ thống >
+// Quản lý check-in. checkinSettingsService.getSettings() has its own
+// DEFAULT_SETTINGS fallback (180 min / unlimited) in case that table is
+// unreachable, so no constant is needed here anymore.
 
 export interface CheckInResult {
   isNewCustomer: boolean;
@@ -51,9 +56,17 @@ export const processCheckIn = async (
     throw new Error("Biển số không hợp lệ");
   }
 
+  // --- BƯỚC 0: LẤY CẤU HÌNH CHECK-IN (cooldown + giới hạn/ngày) ---
+  // Đọc lại mỗi lần gọi (không cache) để admin lưu cấu hình mới là áp dụng
+  // ngay — xem thảo luận trong checkinSettingsService.
+  const settings = await checkinSettingsService.getSettings();
+
+  // Flexible match for test plates (99H99999 or 90H9999) — bypass CẢ cooldown
+  // lẫn giới hạn/ngày, vì đây là biển số QA/demo không nên bị chặn.
+  const isTestPlate = cleanPlate.startsWith("99H99999") || cleanPlate.startsWith("90H9999");
+
   // --- BƯỚC 1: KIỂM TRA COOLDOWN (Dùng biển số đã làm sạch) ---
-  // Flexible match for test plates (99H99999 or 90H9999)
-  if (cleanPlate.startsWith("99H99999") || cleanPlate.startsWith("90H9999")) {
+  if (isTestPlate) {
     console.info("⚡ [CheckIn] Cooldown bypassed for test plate:", cleanPlate);
   } else {
     const { data: lastSession } = await supabase
@@ -71,9 +84,26 @@ export const processCheckIn = async (
 
       console.log(`[CheckIn] ${cleanPlate} last check-in: ${diffMinutes} mins ago`);
 
-      if (diffMinutes < CHECKIN_INTERVAL) {
-        throw new Error(`COOLDOWN:${CHECKIN_INTERVAL - diffMinutes}`);
+      if (diffMinutes < settings.cooldown_minutes) {
+        throw new Error(`COOLDOWN:${settings.cooldown_minutes - diffMinutes}`);
       }
+    }
+  }
+
+  // --- BƯỚC 1B: KIỂM TRA GIỚI HẠN SỐ LẦN CHECK-IN TRONG NGÀY (theo biển số) ---
+  if (isTestPlate) {
+    console.info("⚡ [CheckIn] Daily limit bypassed for test plate:", cleanPlate);
+  } else if (settings.max_checkins_per_day) {
+    const { count: todayCount, error: dailyCountError } = await supabase
+      .from("charging_sessions")
+      .select("*", { count: "exact", head: true })
+      .eq("license_plate", cleanPlate)
+      .gte("start_time", getVietnamDayStartISO());
+
+    if (dailyCountError) {
+      console.error("Lỗi đếm lượt check-in trong ngày:", dailyCountError);
+    } else if ((todayCount || 0) >= settings.max_checkins_per_day) {
+      throw new Error(`DAILY_LIMIT:${todayCount}/${settings.max_checkins_per_day}`);
     }
   }
 

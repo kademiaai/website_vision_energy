@@ -80,7 +80,7 @@ Manages monthly ranking rewards and ID verification.
 
 ### 🏎️ Customer Check-in
 1. **Plate Normalization**: Inputs like `51H-123.45` are stripped to `51H12345` for data integrity.
-2. **Cooldown Check**: Enforces a **30-minute cooldown** per vehicle.
+2. **Cooldown Check**: Enforces a cooldown per vehicle, admin-configurable (default **180 minutes / 3 hours**) via `checkin_settings`, editable at Admin > Quản lý hệ thống > Quản lý check-in. An optional per-plate daily check-in cap can also be set there.
 3. **Session Logging**: Each check-in increments the customer's `total_points`.
 
 ### 🏆 Monthly Rewards & OCR

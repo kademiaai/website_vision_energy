@@ -31,6 +31,8 @@ export default function CheckInForm({ lang }: { lang: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showCooldown, setShowCooldown] = useState(false);
   const [remainingTime, setRemainingTime] = useState(0);
+  const [blockReason, setBlockReason] = useState<"cooldown" | "daily_limit">("cooldown");
+  const [dailyLimitInfo, setDailyLimitInfo] = useState<{ count: number; max: number } | null>(null);
   const [pendingReward, setPendingReward] = useState<{
     reward: any;
     type: "selection" | "completion";
@@ -175,10 +177,17 @@ export default function CheckInForm({ lang }: { lang: string }) {
       setIsNewCustomer(false); // Reset về mode khách cũ cho lần sau
 
     } catch (error: any) {
-      // 4. XỬ LÝ LỖI CHẶN THỜI GIAN (COOLDOWN)
+      // 4. XỬ LÝ LỖI CHẶN THỜI GIAN (COOLDOWN) / GIỚI HẠN SỐ LẦN TRONG NGÀY
       if (error.message?.startsWith("COOLDOWN:")) {
         const minutes = error.message.split(":")[1];
         setRemainingTime(parseInt(minutes));
+        setBlockReason("cooldown");
+        setShowCooldown(true);
+      } else if (error.message?.startsWith("DAILY_LIMIT:")) {
+        const ratio = error.message.split(":")[1];
+        const [count, max] = ratio.split("/").map(Number);
+        setDailyLimitInfo({ count, max });
+        setBlockReason("daily_limit");
         setShowCooldown(true);
       } else {
         // Các lỗi hệ thống khác
@@ -741,7 +750,7 @@ export default function CheckInForm({ lang }: { lang: string }) {
         )}
       </AnimatePresence>
 
-      {/* MODAL: THÔNG BÁO CHỜ (COOLDOWN) */}
+      {/* MODAL: THÔNG BÁO CHỜ (COOLDOWN / GIỚI HẠN SỐ LẦN TRONG NGÀY) */}
       <AnimatePresence>
         {showCooldown && (
           <motion.div
@@ -756,18 +765,33 @@ export default function CheckInForm({ lang }: { lang: string }) {
                 <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                   <AlertTriangle size={40} className="text-red-600 animate-pulse" />
                 </div>
-                <h3 className="text-2xl font-bold text-foreground mb-2">Thao tác quá nhanh!</h3>
-                <p className="text-muted-foreground mb-6">
-                  Hệ thống ghi nhận xe vừa check-in cách đây ít phút. Vui lòng đợi thêm:
-                </p>
-                <div className="bg-red-50 text-red-700 text-3xl font-black py-4 rounded-2xl mb-8">
-                  {remainingTime} {lang === "vi" ? "PHÚT" : "MINS"}
-                </div>
+                {blockReason === "cooldown" ? (
+                  <>
+                    <h3 className="text-2xl font-bold text-foreground mb-2">Thao tác quá nhanh!</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Hệ thống ghi nhận xe vừa check-in cách đây ít phút. Vui lòng đợi thêm:
+                    </p>
+                    <div className="bg-red-50 text-red-700 text-3xl font-black py-4 rounded-2xl mb-8">
+                      {remainingTime} {lang === "vi" ? "PHÚT" : "MINS"}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-2xl font-bold text-foreground mb-2">
+                      {lang === "vi" ? "Đã đạt giới hạn hôm nay!" : "Daily limit reached!"}
+                    </h3>
+                    <p className="text-muted-foreground mb-6">
+                      {lang === "vi"
+                        ? `Xe này đã check-in ${dailyLimitInfo?.count}/${dailyLimitInfo?.max} lượt tối đa trong ngày. Vui lòng quay lại vào ngày mai.`
+                        : `This vehicle has reached today's check-in limit (${dailyLimitInfo?.count}/${dailyLimitInfo?.max}). Please come back tomorrow.`}
+                    </p>
+                  </>
+                )}
                 <button
                   onClick={() => setShowCooldown(false)}
                   className="w-full bg-foreground text-background font-bold py-4 rounded-xl hover:opacity-90 transition-opacity"
                 >
-                  Đã hiểu
+                  {lang === "vi" ? "Đã hiểu" : "Got it"}
                 </button>
               </div>
             </motion.div>

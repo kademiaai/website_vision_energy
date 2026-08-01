@@ -60,7 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "Khách hàng", href: "/admin/customers", icon: <Users size={20} /> },
     { name: "Xếp hạng & Thưởng", href: "/admin/leaderboard", icon: <Trophy size={20} /> },
     { name: "Kho E-voucher", href: "/admin/evouchers", icon: <Ticket size={20} /> },
-    // { name: "Cài đặt", href: "/admin/settings", icon: <Settings size={20} /> },
+    { name: "Quản lý hệ thống", href: "/admin/system", icon: <Settings size={20} /> },
   ];
 
   return (

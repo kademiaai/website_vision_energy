@@ -41,8 +41,9 @@ Vision Energy is a mobile-first management system for a physical EV charging sta
 
 ### 3.2 Customer Check-in (`app/page.tsx` → `CheckInForm.tsx` → `checkinService.ts`)
 - **Plate normalization**: `51H-123.45` → `51H12345` (strip all non-alphanumeric, uppercase)
-- **45-minute cooldown** enforcement per plate (prevents rapid duplicate check-ins)
-- **Test plate bypass**: Plates starting with `99H` or `90H` skip cooldown
+- **Admin-configurable cooldown** enforcement per plate (default 180 min / 3h, prevents rapid duplicate check-ins) — see `checkin_settings` table and `/admin/system`
+- **Optional daily limit** per plate (default: unlimited), also admin-configurable
+- **Test plate bypass**: Plates starting with `99H` or `90H` skip both cooldown and daily limit
 - **New customer registration**: Prompts for name + phone on first visit
 - **Masked inputs**: Auto-formats `51H12345` → `51H-12345` visually
 - **Points tracking**: Each check-in increments `customers.total_points` and logs to `charging_sessions`
@@ -182,7 +183,7 @@ Vision Energy is a mobile-first management system for a physical EV charging sta
 ## 6. Key Business Rules
 - **Timezone**: All period calculations use **UTC+7 (Asia/Ho_Chi_Minh)** via `lib/timezone.ts`
 - **Plate normalization**: `plate.toUpperCase().replace(/[^A-Z0-9]/g, "")` — must be identical across all services
-- **Cooldown**: 45 minutes between check-ins for same plate (bypassed for `99H*` / `90H*` test plates)
+- **Cooldown**: admin-configurable minutes between check-ins for same plate (default 180 min), plus an optional admin-configurable daily limit per plate — both stored in `checkin_settings`, editable at `/admin/system`; bypassed for `99H*` / `90H*` test plates
 - **Reward FK**: References `license_plate` (text), NOT a UUID `customer_id`
 - **Optimistic concurrency**: Status updates use `.eq('status', 'expected_value')` guards
 - **OCR fallback**: `gpt-4o-mini` → `mistral` on failure

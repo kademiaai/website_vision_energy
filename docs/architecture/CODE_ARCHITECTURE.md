@@ -45,16 +45,18 @@ website_vision_energy/
 |------|------|
 | `app/page.tsx` | **Home page** — renders Header, CheckInForm, Amenities, Footer. Manages language state (`vi`/`en`). Uses Framer Motion for entrance animations. |
 | `components/forms/CheckInForm.tsx` | **~600-line check-in form** — the most complex component. Handles: plate formatting (auto-dash), member/new-customer toggle, cooldown enforcement, success/reward/voucher modals. Manages 5+ concurrent modal states with priority (completion > selection > voucher > success). Calls `processCheckIn`, then fetches pending notifications. |
-| `app/services/checkinService.ts` | **Core check-in logic** — normalizes plate (`toUpperCase` + strip non-alphanumeric), enforces 180-min cooldown, upserts customer, inserts charging_session, calculates monthly count, fetches pending reward + e-voucher notifications in parallel, computes rank. |
+| `app/services/checkinService.ts` | **Core check-in logic** — normalizes plate (`toUpperCase` + strip non-alphanumeric), enforces an admin-configurable cooldown (default 180-min, read from `checkin_settings` via `checkinSettingsService`) plus an optional per-plate daily limit, upserts customer, inserts charging_session, calculates monthly count, fetches pending reward + e-voucher notifications in parallel, computes rank. |
+| `app/services/checkinSettingsService.ts` | Reads/writes the singleton `checkin_settings` row (`cooldown_minutes`, `max_checkins_per_day`) backing Admin > Quản lý hệ thống > Quản lý check-in (`/admin/system`). |
 
 **Data flow**:  
 `CheckInForm.submit()` → `processCheckIn(plate, name?, phone?)` →  
-1. Check cooldown (test plates bypass)  
-2. Upsert `customers` table (license_plate unique)  
-3. Insert `charging_sessions` row  
-4. Count monthly sessions  
-5. `Promise.all([rewardService.getPendingNotification, evoucherService.getPendingVoucherNotification])`  
-6. Return `CheckInResult` → render appropriate modal
+1. Fetch `checkin_settings` (cooldown minutes + daily limit)
+2. Check cooldown, then check daily limit (test plates bypass both)
+3. Upsert `customers` table (license_plate unique)  
+4. Insert `charging_sessions` row  
+5. Count monthly sessions  
+6. `Promise.all([rewardService.getPendingNotification, evoucherService.getPendingVoucherNotification])`  
+7. Return `CheckInResult` → render appropriate modal
 
 **Priority stacking**:  
 - If `pendingReward.type === "completion"` → show celebration modal with e-voucher button embedded  
@@ -205,7 +207,7 @@ website_vision_energy/
 
 4. **Reward notification priority** — `completion` (admin approved) > `selection` (announced but not yet submitted). E-voucher is only shown when matching reward is `completed`.
 
-5. **Cooldown bypass** — test plates (`99H99999`, `90H9999`) skip the 180-min cooldown for testing.
+5. **Cooldown bypass** — test plates (`99H99999`, `90H9999`) skip both the cooldown (default 180-min, admin-configurable) and the daily check-in limit, for testing.
 
 6. **Client-side OCR downsizing** — images are resized client-side before upload to avoid Puter's 10MB base64 payload limit.
 
